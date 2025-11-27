@@ -6,6 +6,9 @@ const PDFDocument = require('pdfkit');
 export interface InvoiceData {
   numero: string;
   data: string;
+  tipoDocumento: string;
+  art73: string;
+  codiceDestinatario: string;
   cedente: {
     nome: string;
     partitaIva: string;
@@ -50,10 +53,10 @@ export class PdfGeneratorService {
 
         const drawContainer = (y: number, height: number) => {
         doc.save()
-          .rect(40, y, 515, height)  // x, y, larghezza, altezza
-          .lineWidth(1)              // spessore bordo
-          .strokeColor('#000000')    // colore bordo
-          .stroke()                  // disegna il bordo
+          .rect(40, y, 515, height)
+          .lineWidth(1)
+          .strokeColor('#000000')
+          .stroke()
           .restore();
         };
 
@@ -70,7 +73,7 @@ export class PdfGeneratorService {
         doc.moveDown(1);
 
         //
-        // CEDENTE / CESSIONARIO – COME IL MODALE
+        // CEDENTE / CESSIONARIO
         //
         const startY = doc.y;
         const containerHeight = 100;
@@ -106,6 +109,11 @@ export class PdfGeneratorService {
           .text(`Cap: ${invoiceData.cessionario.cap}`, rightX);
           
         doc.moveDown(5);
+
+        //
+        // TABELLA TIPO DOCUMENTO
+        //
+        this.drawDocumentInfoTable(doc, invoiceData, drawContainer);
 
         //
         // RIGHE – TABELLA
@@ -157,7 +165,7 @@ export class PdfGeneratorService {
         doc.moveDown(2);
 
         //
-        // TOTALI – PIÙ SIMILI AL MODALE
+        // TOTALI
         //
         doc.font('Helvetica-Bold').fontSize(11).fillColor('#333')
           .text(`Totale Imponibile: ${invoiceData.imponibile} €`);
@@ -172,5 +180,73 @@ export class PdfGeneratorService {
         reject(err);
       }
     });
+  }
+
+  /**
+   * Disegna la tabella con le informazioni del documento
+   */
+  private drawDocumentInfoTable(doc: any, invoiceData: InvoiceData, drawContainer: Function): void {
+    doc.moveDown(1);
+
+    const tableStartY = doc.y;
+    const rowHeight = 20;
+    const tableHeight = rowHeight * 2; // header + 1 riga dati
+
+    // Disegna il container principale
+    drawContainer(tableStartY - 5, tableHeight);
+
+    // Definisci le colonne
+    const col1X = 50;
+    const col2X = 140;
+    const col3X = 230;
+    const col4X = 340;
+    const col5X = 450;
+
+    // HEADER con sfondo grigio
+    doc.save()
+      .rect(40, tableStartY - 5, 515, rowHeight)
+      .fill('#f0f0f0')
+      .restore();
+
+    // Testi header
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#333');
+    const headerY = tableStartY;
+    doc.text('Tipologia documento', col1X, headerY);
+    doc.text('Art.73', col2X, headerY);
+    doc.text('Numero documento', col3X, headerY);
+    doc.text('Data documento', col4X, headerY);
+    doc.text('Codice destinatario', col5X, headerY);
+
+    // RIGA DATI
+    doc.font('Helvetica').fontSize(8).fillColor('#555');
+    const dataY = tableStartY + rowHeight;
+    
+    // Mappa tipo documento (codici standard fattura elettronica)
+    const tipoDocumentoMap: { [key: string]: string } = {
+      'TD01': 'Fattura',
+      'TD02': 'Acconto/Anticipo su fattura',
+      'TD03': 'Acconto/Anticipo su parcella',
+      'TD04': 'Nota di Credito',
+      'TD05': 'Nota di Debito',
+      'TD06': 'Parcella',
+      'TD20': 'Autofattura',
+      'TD21': 'Autofattura per splafonamento',
+      'TD22': 'Estrazione beni da Deposito IVA',
+      'TD23': 'Estrazione beni da Deposito IVA con versamento IVA',
+      'TD24': 'Fattura differita',
+      'TD25': 'Fattura differita di cui art.21 c.4 lett. a)',
+      'TD26': 'Cessione di beni ammortizzabili',
+      'TD27': 'Fattura per autoconsumo'
+    };
+
+    const tipoDocText = tipoDocumentoMap[invoiceData.tipoDocumento] || invoiceData.tipoDocumento;
+    
+    doc.text(tipoDocText, col1X, dataY);
+    doc.text(invoiceData.art73, col2X, dataY);
+    doc.text(invoiceData.numero, col3X, dataY);
+    doc.text(invoiceData.data, col4X, dataY);
+    doc.text(invoiceData.codiceDestinatario, col5X, dataY);
+
+    doc.moveDown(2);
   }
 }

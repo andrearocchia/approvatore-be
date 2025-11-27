@@ -8,6 +8,9 @@ export interface Invoice {
   id: string;
   numero: string;
   data: string;
+  tipoDocumento: string;
+  art73: string;
+  codiceDestinatario: string;
   cedente: {
     nome: string;
     partitaIva: string;
@@ -59,6 +62,7 @@ export class InvoicePdfService {
     const body = root['FatturaElettronicaBody']?.[0] || root['p:FatturaElettronicaBody']?.[0];
     if (!header || !body) throw new Error('Header o Body mancanti');
 
+    const datiTrasmissione = header.DatiTrasmissione?.[0];
     const cedente = header.CedentePrestatore?.[0];
     const cessionario = header.CessionarioCommittente?.[0];
     const datiGenerali = body.DatiGenerali?.[0]?.DatiGeneraliDocumento?.[0];
@@ -68,6 +72,9 @@ export class InvoicePdfService {
     return {
       numero: this.safeGet(datiGenerali?.Numero),
       data: this.safeGet(datiGenerali?.Data),
+      tipoDocumento: this.safeGet(datiGenerali?.TipoDocumento),
+      art73: this.safeGet(datiGenerali?.Art73, 'NO'),
+      codiceDestinatario: this.safeGet(datiTrasmissione?.CodiceDestinatario),
       cedente: {
         nome: this.safeGet(cedente?.DatiAnagrafici?.[0]?.Anagrafica?.[0]?.Denominazione),
         partitaIva: this.safeGet(cedente?.DatiAnagrafici?.[0]?.IdFiscaleIVA?.[0]?.IdCodice),
