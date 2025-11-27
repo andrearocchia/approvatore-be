@@ -108,7 +108,7 @@ export class InvoicePdfService {
 
     const parsed = await parseStringPromise(cleanXml, { explicitArray: true, mergeAttrs: false, normalize: true, trim: true });
     const invoiceData = this.extractInvoiceData(parsed);
-    const tempPath = join(process.env.INVOICE_OUTPUT_DIR || '/tmp', `fattura-${Date.now()}.pdf`);
+    const tempPath = join(process.env.INVOICE_OUTPUT_DIR!, `fattura-${Date.now()}.pdf`);
 
     await this.generatePDF(invoiceData, tempPath);
 
@@ -117,6 +117,9 @@ export class InvoicePdfService {
     return buffer;
   }
 
+  // =============================
+  // Genera il PDF Invoice
+  // =============================
   private generatePDF(invoiceData: Omit<Invoice, 'id'>, outputPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
@@ -124,7 +127,68 @@ export class InvoicePdfService {
         const stream = createWriteStream(outputPath);
         doc.pipe(stream);
 
-        // header, cedente, cessionario, tabella ... come prima
+        // Titolo
+        doc.fontSize(20).font('Helvetica-Bold').text('FATTURA', { align: 'center' });
+        doc.moveDown(0.5);
+
+        // Numero e data
+        doc.fontSize(10).font('Helvetica').text(`Numero: ${invoiceData.numero} | Data: ${invoiceData.data}`);
+        doc.moveDown(1);
+
+        // Cedente
+        doc.fontSize(12).font('Helvetica-Bold').text('Cedente/Prestatore');
+        doc.fontSize(10).font('Helvetica');
+        doc.text(`${invoiceData.cedente.nome}`);
+        doc.text(`P.IVA: ${invoiceData.cedente.partitaIva}`);
+        doc.text(`${invoiceData.cedente.indirizzo}, ${invoiceData.cedente.cap} ${invoiceData.cedente.comune}`);
+        doc.moveDown(0.5);
+
+        // Cessionario
+        doc.fontSize(12).font('Helvetica-Bold').text('Cessionario/Committente');
+        doc.fontSize(10).font('Helvetica');
+        doc.text(`${invoiceData.cessionario.nome}`);
+        doc.text(`P.IVA: ${invoiceData.cessionario.partitaIva}`);
+        doc.text(`${invoiceData.cessionario.indirizzo}, ${invoiceData.cessionario.cap} ${invoiceData.cessionario.comune}`);
+        doc.moveDown(1);
+
+        // Tabella righe
+        doc.fontSize(12).font('Helvetica-Bold').text('Dettagli');
+        doc.moveDown(0.3);
+
+        const tableTop = doc.y;
+        const col1 = 50;
+        const col2 = 200;
+        const col3 = 350;
+        const col4 = 450;
+
+        // Header tabella
+        doc.fontSize(9).font('Helvetica-Bold');
+        doc.text('Descrizione', col1, tableTop);
+        doc.text('Quantità', col2, tableTop);
+        doc.text('Prezzo Unit.', col3, tableTop);
+        doc.text('Importo', col4, tableTop);
+
+        doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+
+        // Righe
+        doc.fontSize(9).font('Helvetica');
+        let currentY = tableTop + 20;
+
+        invoiceData.linee.forEach(linea => {
+          doc.text(linea.descrizione, col1, currentY);
+          doc.text(linea.quantita, col2, currentY);
+          doc.text(linea.prezzoUnitario, col3, currentY);
+          doc.text(linea.importo, col4, currentY);
+          currentY += 15;
+        });
+
+        doc.moveDown(1);
+
+        // Totali
+        doc.fontSize(11).font('Helvetica-Bold');
+        doc.text(`Totale Imponibile: ${invoiceData.imponibile} €`);
+        doc.text(`IVA (${invoiceData.aliquota}%): ${invoiceData.imposta} €`);
+        doc.fontSize(12).font('Helvetica-Bold').text(`TOTALE: ${invoiceData.totale} €`);
 
         doc.end();
         stream.on('finish', () => resolve());
@@ -162,5 +226,14 @@ export class InvoicePdfService {
     }
 
     return invoices;
+  }
+
+  public async generatePdfFromData(invoiceData: Omit<Invoice, 'id'>): Promise<Buffer> {
+    const outputDir = process.env.INVOICE_OUTPUT_DIR!;
+    const tempPath = join(outputDir, `fattura-${Date.now()}.pdf`);
+    await this.generatePDF(invoiceData, tempPath);
+    const buffer = readFileSync(tempPath);
+    unlinkSync(tempPath);
+    return buffer;
   }
 }

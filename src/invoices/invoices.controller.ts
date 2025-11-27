@@ -43,4 +43,18 @@ export class InvoicesController {
       );
     }
   }
+
+  @Post('generate-pdf')
+  async generatePdf(@Body() invoiceData: any) {
+    try {
+      const buffer = await this.pdfService.generatePdfFromData(invoiceData);
+      const base64 = buffer.toString('base64');
+      return { pdf: base64 };
+    } catch (error) {
+      throw new HttpException(
+        { success: false, message: error.message },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
 }
