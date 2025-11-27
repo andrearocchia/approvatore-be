@@ -102,12 +102,14 @@ export class InvoicePdfService {
   // PDF
   // =============================
   public async convertXMLToPDF(xmlContent: string): Promise<Buffer> {
+    console.log(xmlContent);
     const cleanXml = xmlContent
       .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
       .replace(/&(?!(?:amp|lt|gt|quot|apos);)/g, '&amp;');
 
     const parsed = await parseStringPromise(cleanXml, { explicitArray: true, mergeAttrs: false, normalize: true, trim: true });
     const invoiceData = this.extractInvoiceData(parsed);
+    
     const tempPath = join(process.env.INVOICE_OUTPUT_DIR!, `fattura-${Date.now()}.pdf`);
 
     await this.generatePDF(invoiceData, tempPath);
@@ -127,77 +129,132 @@ export class InvoicePdfService {
         const stream = createWriteStream(outputPath);
         doc.pipe(stream);
 
-        // Titolo
-        doc.fontSize(20).font('Helvetica-Bold').text('FATTURA', { align: 'center' });
+        const drawContainer = (y: number, height: number) => {
+        doc.save()
+          .rect(40, y, 515, height)  // x, y, larghezza, altezza
+          .lineWidth(1)              // spessore bordo
+          .strokeColor('#000000')    // colore bordo
+          .stroke()                  // disegna il bordo
+          .restore();
+        };
+
+        //
+        // TITOLO o eventuale logo
+        //
+        doc.fontSize(20).font('Helvetica-Bold').text('', { align: 'center' });
         doc.moveDown(0.5);
 
-        // Numero e data
+        //
+        // NUMERO + DATA
+        //
         doc.fontSize(10).font('Helvetica').text(`Numero: ${invoiceData.numero} | Data: ${invoiceData.data}`);
         doc.moveDown(1);
 
-        // Cedente
-        doc.fontSize(12).font('Helvetica-Bold').text('Cedente/Prestatore');
-        doc.fontSize(10).font('Helvetica');
-        doc.text(`${invoiceData.cedente.nome}`);
-        doc.text(`P.IVA: ${invoiceData.cedente.partitaIva}`);
-        doc.text(`${invoiceData.cedente.indirizzo}, ${invoiceData.cedente.cap} ${invoiceData.cedente.comune}`);
-        doc.moveDown(0.5);
+        //
+        // CEDENTE / CESSIONARIO — COME IL MODALE
+        //
+        const startY = doc.y;
+        const containerHeight = 100;
 
-        // Cessionario
-        doc.fontSize(12).font('Helvetica-Bold').text('Cessionario/Committente');
-        doc.fontSize(10).font('Helvetica');
-        doc.text(`${invoiceData.cessionario.nome}`);
-        doc.text(`P.IVA: ${invoiceData.cessionario.partitaIva}`);
-        doc.text(`${invoiceData.cessionario.indirizzo}, ${invoiceData.cessionario.cap} ${invoiceData.cessionario.comune}`);
+        drawContainer(startY - 5, containerHeight);
+
+        // COLONNA SINISTRA - CEDENTE / PRESTATORE (FORNITORE)
+        doc.font('Helvetica-Bold')
+          .fontSize(10)
+          .fillColor('#333')
+          .text('Cedente/Prestatore (fornitore)', 50, startY);
+
+        doc.font('Helvetica').fontSize(8).fillColor('#555')
+          .text(`Denominazione: ${invoiceData.cedente.nome}`, 50, startY + 18)
+          .text(`Identificativo fiscale ai fini di IVA: ${invoiceData.cedente.partitaIva}`, 50)
+          .text(`Indirizzo: ${invoiceData.cedente.indirizzo}`, 50)
+          .text(`Comune: ${invoiceData.cedente.comune}`, 50)
+          .text(`Cap: ${invoiceData.cedente.cap}`, 50)
+          .text(`Telefono: ${invoiceData.cedente.telefono}`, 50)
+          .text(`Email: ${invoiceData.cedente.email}`, 50);
+
+        // COLONNA DESTRA - CESSIONARIO / COMMITTENTE
+        const rightX = 300;
+
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#333')
+          .text('Cessionario/Committente', rightX, startY);
+
+        doc.font('Helvetica').fontSize(8).fillColor('#555')
+          .text(`Identificativo fiscale ai fini di IVA: ${invoiceData.cessionario.partitaIva}`, rightX, startY + 18)
+          .text(`Denominazione: ${invoiceData.cessionario.nome}`, rightX)
+          .text(`Indirizzo: ${invoiceData.cessionario.indirizzo}`, rightX)
+          .text(`Comune: ${invoiceData.cessionario.comune}`, rightX)
+          .text(`Cap: ${invoiceData.cessionario.cap}`, rightX);
+          
+        doc.moveDown(5);
+
+        //
+        // RIGHE — TABELLA
+        //
         doc.moveDown(1);
-
-        // Tabella righe
-        doc.fontSize(12).font('Helvetica-Bold').text('Dettagli');
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#333').text('');
         doc.moveDown(0.3);
 
-        const tableTop = doc.y;
         const col1 = 50;
         const col2 = 200;
         const col3 = 350;
         const col4 = 450;
 
-        // Header tabella
-        doc.fontSize(9).font('Helvetica-Bold');
-        doc.text('Descrizione', col1, tableTop);
-        doc.text('Quantità', col2, tableTop);
-        doc.text('Prezzo Unit.', col3, tableTop);
-        doc.text('Importo', col4, tableTop);
+        // header sfondo grigio
+        doc.save()
+          .rect(40, doc.y, 515, 18)
+          .fill('#f0f0f0')
+          .restore();
 
-        doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
-
-        // Righe
-        doc.fontSize(9).font('Helvetica');
-        let currentY = tableTop + 20;
-
-        invoiceData.linee.forEach(linea => {
-          doc.text(linea.descrizione, col1, currentY);
-          doc.text(linea.quantita, col2, currentY);
-          doc.text(linea.prezzoUnitario, col3, currentY);
-          doc.text(linea.importo, col4, currentY);
-          currentY += 15;
-        });
+        doc.moveDown(0.15);
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#333');
+        doc.text('Descrizione', col1, doc.y + 3);
+        doc.text('Quantità', col2, doc.y + 3);
+        doc.text('Prezzo Unit.', col3, doc.y + 3);
+        doc.text('Importo', col4, doc.y + 3);
 
         doc.moveDown(1);
 
-        // Totali
-        doc.fontSize(11).font('Helvetica-Bold');
-        doc.text(`Totale Imponibile: ${invoiceData.imponibile} €`);
+        // righe
+        doc.font('Helvetica').fontSize(9).fillColor('#555');
+
+        invoiceData.linee.forEach((linea, idx) => {
+          // zebra striping
+          if (idx % 2 === 0) {
+            doc.save()
+              .rect(40, doc.y - 2, 515, 15)
+              .fill('#fafafa')
+              .restore();
+          }
+
+          doc.text(linea.descrizione, col1, doc.y);
+          doc.text(String(linea.quantita), col2, doc.y);
+          doc.text(String(linea.prezzoUnitario), col3, doc.y);
+          doc.text(String(linea.importo), col4, doc.y);
+
+          doc.moveDown(1);
+        });
+
+        doc.moveDown(2);
+
+        //
+        // TOTALI — PIÙ SIMILI AL MODALE
+        //
+        doc.font('Helvetica-Bold').fontSize(11).fillColor('#333')
+          .text(`Totale Imponibile: ${invoiceData.imponibile} €`);
         doc.text(`IVA (${invoiceData.aliquota}%): ${invoiceData.imposta} €`);
-        doc.fontSize(12).font('Helvetica-Bold').text(`TOTALE: ${invoiceData.totale} €`);
+        doc.fontSize(12).text(`TOTALE: ${invoiceData.totale} €`);
 
         doc.end();
         stream.on('finish', () => resolve());
         stream.on('error', reject);
+
       } catch (err) {
         reject(err);
       }
     });
   }
+
 
   // =============================
   // Leggi XML e ritorna array di Invoice
