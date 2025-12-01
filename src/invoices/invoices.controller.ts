@@ -1,6 +1,7 @@
-import { Controller, Post, Get, Body, HttpException, HttpStatus, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpException, HttpStatus, Param, Patch } from '@nestjs/common';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceDbService } from './invoice-db.service';
+import { StatoFattura } from '@prisma/client';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
@@ -140,6 +141,37 @@ export class InvoicesController {
       };
     } catch (error) {
       console.error('Errore nel recupero PDF:', error.message);
+      throw new HttpException(
+        { success: false, message: error.message },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch(':codiceUnico/status')
+  async updateInvoiceStatus(
+    @Param('codiceUnico') codiceUnico: string,
+    @Body() body: { stato: string; note?: string }
+  ) {
+    try {
+      // Validazione dello stato
+      const validStates: StatoFattura[] = ['in_attesa', 'approvato', 'rifiutato'];
+      if (!validStates.includes(body.stato as StatoFattura)) {
+        throw new Error(`Stato non valido: ${body.stato}`);
+      }
+
+      await this.invoiceDbService.updateInvoiceStatus(
+        parseInt(codiceUnico),
+        body.stato as StatoFattura,
+        body.note
+      );
+      
+      return {
+        success: true,
+        message: 'Stato fattura aggiornato',
+      };
+    } catch (error) {
+      console.error('Errore nell\'aggiornamento stato:', error.message);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,

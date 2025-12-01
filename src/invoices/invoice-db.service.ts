@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, StatoFattura } from '@prisma/client';
 import { Invoice } from './invoice-pdf.service';
 
 const prisma = new PrismaClient();
@@ -74,6 +74,16 @@ export class InvoiceDbService {
     });
     
     return invoice.codiceUnico;
+  }
+
+  async updateInvoiceStatus(codiceUnico: number, stato: StatoFattura, note?: string): Promise<void> {
+    await prisma.invoice.update({
+      where: { codiceUnico },
+      data: { 
+        stato,
+        ...(note !== undefined && { note })
+      },
+    });
   }
 
   async getInvoiceById(codiceUnico: number) {
