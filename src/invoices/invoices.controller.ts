@@ -1,6 +1,8 @@
 import { Controller, Post, Get, Body, HttpException, HttpStatus, Param, ParseIntPipe } from '@nestjs/common';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceDbService } from './invoice-db.service';
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
 
 @Controller('invoices')
 export class InvoicesController {
@@ -100,6 +102,44 @@ export class InvoicesController {
       };
     } catch (error) {
       console.error('Errore nel recupero fattura:', error.message);
+      throw new HttpException(
+        { success: false, message: error.message },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':codiceUnico/pdf')
+  async getInvoicePdf(@Param('codiceUnico') codiceUnico: string) {
+    try {
+      const pdfDir = process.env.PDF_OUTPUT_DIR;
+      if (!pdfDir) {
+        throw new Error('PDF_OUTPUT_DIR non configurata');
+      }
+
+      // Cerca il file PDF con il codiceUnico
+      const files = readdirSync(pdfDir);
+      const pdfFile = files.find(f => 
+        f.startsWith(`fattura-${codiceUnico}-`) && f.endsWith('.pdf')
+      );
+
+      if (!pdfFile) {
+        throw new HttpException(
+          { success: false, message: 'PDF non trovato per questa fattura' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      const pdfPath = join(pdfDir, pdfFile);
+      const buffer = readFileSync(pdfPath);
+
+      return {
+        success: true,
+        pdf: buffer.toString('base64'),
+        filename: pdfFile,
+      };
+    } catch (error) {
+      console.error('Errore nel recupero PDF:', error.message);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
