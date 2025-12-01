@@ -179,7 +179,7 @@ export class PdfGeneratorService {
     doc.y = yPos + 20;
 
     doc.save()
-      .moveTo(50, doc.y)      // x1, y
+      .moveTo(40, doc.y)      // x1, y
       .lineTo(555, doc.y)     // x2, stesso y
       .lineWidth(1)
       .strokeColor('#000000')
@@ -231,8 +231,6 @@ export class PdfGeneratorService {
 
       currentY += rowHeight;
     });
-
-    doc.y = currentY + 10;
   }
 
   /**
@@ -247,23 +245,57 @@ export class PdfGeneratorService {
    * TOTALI
    */
   private drawTotals(doc: any, invoiceData: InvoiceData): void {
-    doc.moveDown(1);
+    const startY = doc.y + 30;
+    const startX = 50;
 
-    doc.font('Helvetica-Bold').fontSize(11).fillColor('#333')
-      .text(`Totale Imponibile: ${invoiceData.imponibile} €`);
-    doc.text(`IVA (${invoiceData.aliquota ?? '-' }%): ${invoiceData.imposta} €`);
-    doc.fontSize(12).text(`TOTALE: ${invoiceData.totale} €`);
+    doc.save()
+      .moveTo(40, startY)      // x1, y
+      .lineTo(555, startY)     // x2, stesso y
+      .lineWidth(1)
+      .strokeColor('#000000')
+      .stroke()
+      .restore();
+
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#333')
+    .text(`TOTALI`, startX, startY + 10)
+
+    let yPos = startY + 30;
+    doc.font('Helvetica').fontSize(10).fillColor('#555')
+      .text(`Totale Imponibile:`, startX, yPos)
+      .text(`${invoiceData.imponibile} €`, 150, yPos);
+    yPos += 10;
+
+    doc.text(`IVA (${invoiceData.aliquota ?? '-' }%):`, startX, yPos);
+    doc.text(`${invoiceData.imposta} €`, 150, yPos);
+    yPos += 15;
+    
+    doc.save()
+      .moveTo(startX, yPos)      // x1, y
+      .lineTo(200, yPos)     // x2, stesso y
+      .lineWidth(1)
+      .strokeColor('#000000')
+      .stroke()
+      .restore();      
+
+    yPos += 10;
+
+    doc.text(`TOTALE:`, startX, yPos);
+    doc.text(`${invoiceData.totale} €`, 150, yPos);
+    yPos += 10;
 
     if (invoiceData.modalitaPagamento) {
       doc.moveDown(1);
       doc.fontSize(10).font('Helvetica').fillColor('#555');
-      doc.text(`Modalità pagamento: ${invoiceData.modalitaPagamento}`);
+      doc.text(`Modalità pagamento:`);
+      doc.text(`${invoiceData.modalitaPagamento}`);
       
       if (invoiceData.scadenzaPagamento) {
-        doc.text(`Scadenza: ${invoiceData.scadenzaPagamento}`);
+        doc.text(`Scadenza:`);
+        doc.text(`${invoiceData.scadenzaPagamento}`);
       }
       if (invoiceData.importoPagamento) {
-        doc.text(`Importo: ${invoiceData.importoPagamento} €`);
+        doc.text(`Importo:`);
+        doc.text(`${invoiceData.importoPagamento} €`);
       }
     }
   }
