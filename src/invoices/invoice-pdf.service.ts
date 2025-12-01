@@ -3,6 +3,7 @@ import { parseStringPromise } from 'xml2js';
 import { readFileSync, unlinkSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { PdfGeneratorService, InvoiceData } from './pdf-generator.service';
+import { InvoiceDbService } from './invoice-db.service';
 
 export interface Invoice {
   id: string;
@@ -79,13 +80,16 @@ export interface Invoice {
 
 @Injectable()
 export class InvoicePdfService {
-  constructor(private readonly pdfGenerator: PdfGeneratorService) {}
+  constructor(
+    private readonly pdfGenerator: PdfGeneratorService,
+    private readonly invoiceDb: InvoiceDbService,
+  ) {}
 
   // =============================
   // Helper
   // =============================
   safeGet(obj: any, defaultValue = 'N/A'): string {
-    if (!obj) return defaultValue;
+    if (!obj || (Array.isArray(obj) && obj.length === 0)) return defaultValue;
     return Array.isArray(obj) ? obj[0] : obj;
   }
 
@@ -295,19 +299,17 @@ export class InvoicePdfService {
     await this.pdfGenerator.generatePDF(pdfData, tempPath);
 
     const buffer = readFileSync(tempPath);
-    // PDF rimane salvato nella cartella PDF_OUTPUT_DIR
     return buffer;
   }
 
   // =============================
-  // Leggi XML e ritorna array di Invoice
+  // Parsing XML dalla directory
   // =============================
-  public async listInvoicesFromXml(): Promise<Invoice[]> {
+  public async parseAndSaveXmlFiles(): Promise<void> {
     const folderPath = process.env.INVOICE_OUTPUT_DIR;
     if (!folderPath) throw new Error('INVOICE_OUTPUT_DIR non definita');
 
     const files = readdirSync(folderPath).filter(f => f.toLowerCase().endsWith('.xml'));
-    const invoices: Invoice[] = [];
 
     for (const fileName of files) {
       const filePath = join(folderPath, fileName);
@@ -325,21 +327,35 @@ export class InvoicePdfService {
         });
         
         const invoiceData = this.extractInvoiceData(parsed);
-        invoices.push({ id: fileName, ...invoiceData });
+        const codiceUnico = await this.invoiceDb.saveInvoice(invoiceData);
+        
+        // Genera PDF
+        await this.generatePdf(invoiceData, codiceUnico);
+        
+        // Cancella il file XML
+        unlinkSync(filePath);
+        
       } catch (err) {
         console.error(`Errore parsing ${fileName}:`, err.message);
       }
     }
-
-    return invoices;
   }
 
-  public async generatePdfFromData(invoiceData: Omit<Invoice, 'id'>): Promise<Buffer> {
+  public async generatePdf(invoiceData: Omit<Invoice, 'id'>, codiceUnico?: number): Promise<Buffer> {
     const pdfData = this.convertToInvoiceData(invoiceData);
     
     const outputDir = process.env.PDF_OUTPUT_DIR!;
-    const tempPath = join(outputDir, `fattura-${Date.now()}.pdf`);
+    const fileName = codiceUnico 
+      ? `fattura-${codiceUnico}-${Date.now()}.pdf`
+      : `fattura-${Date.now()}.pdf`;
+    const tempPath = join(outputDir, fileName);
+    
+    // Aspetta che il PDF sia completamente scritto
     await this.pdfGenerator.generatePDF(pdfData, tempPath);
+    
+    // Piccolo delay per sicurezza (il filesystem potrebbe non essere immediatamente sincronizzato)
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     const buffer = readFileSync(tempPath);
     return buffer;
   }

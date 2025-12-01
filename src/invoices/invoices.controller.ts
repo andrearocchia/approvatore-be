@@ -1,9 +1,13 @@
-import { Controller, Post, Get, Body, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpException, HttpStatus, Param, ParseIntPipe } from '@nestjs/common';
 import { InvoicePdfService } from './invoice-pdf.service';
+import { InvoiceDbService } from './invoice-db.service';
 
 @Controller('invoices')
 export class InvoicesController {
-  constructor(private pdfService: InvoicePdfService) {}
+  constructor(
+    private pdfService: InvoicePdfService,
+    private invoiceDbService: InvoiceDbService,
+  ) {}
 
   @Post('xml-to-pdf')
   async convertXmlToPdf(@Body() body: { xmlContent: string }) {
@@ -27,16 +31,75 @@ export class InvoicesController {
     }
   }
 
-  @Get('list')
-  async listInvoices() {
+  @Post('parse-xml-files')
+  async parseXmlFiles() {
     try {
-      const invoices = await this.pdfService.listInvoicesFromXml();
+      await this.pdfService.parseAndSaveXmlFiles();
+      return {
+        success: true,
+        message: 'File XML parsati e salvati in DB',
+      };
+    } catch (error) {
+      console.error('Errore nel parsing XML:', error.message);
+      throw new HttpException(
+        { success: false, message: error.message },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('all')
+  async getAllInvoices() {
+    try {
+      const invoices = await this.invoiceDbService.getAllInvoices();
       return {
         success: true,
         invoices,
       };
     } catch (error) {
-      console.error('Errore nel listare fatture:', error.message);
+      console.error('Errore nel recupero fatture:', error.message);
+      throw new HttpException(
+        { success: false, message: error.message },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('standby')
+  async getStandByInvoices() {
+    try {
+      const invoices = await this.invoiceDbService.getStandByInvoices();
+      return {
+        success: true,
+        invoices,
+      };
+    } catch (error) {
+      console.error('Errore nel recupero fatture in attesa:', error.message);
+      throw new HttpException(
+        { success: false, message: error.message },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':codiceUnico')
+  async getInvoiceById(@Param('codiceUnico') codiceUnico: string) {
+    try {
+      const invoice = await this.invoiceDbService.getInvoiceById(parseInt(codiceUnico));
+      
+      if (!invoice) {
+        throw new HttpException(
+          { success: false, message: 'Fattura non trovata' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      
+      return {
+        success: true,
+        invoice,
+      };
+    } catch (error) {
+      console.error('Errore nel recupero fattura:', error.message);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -45,9 +108,12 @@ export class InvoicesController {
   }
 
   @Post('generate-pdf')
-  async generatePdf(@Body() invoiceData: any) {
+  async generatePdf(@Body() body: { invoiceData: any; codiceUnico?: number }) {
     try {
-      const buffer = await this.pdfService.generatePdfFromData(invoiceData);
+      const buffer = await this.pdfService.generatePdf(
+        body.invoiceData,
+        body.codiceUnico,
+      );
       const base64 = buffer.toString('base64');
       return { pdf: base64 };
     } catch (error) {
