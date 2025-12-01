@@ -64,7 +64,7 @@ export class PdfGeneratorService {
         // CONTAINER 1: INTESTAZIONE
         this.drawTitle(doc, invoiceData);
 
-        // CONTAINER 2: CEDENTE/CESSIONARIO (diviso in due sezioni verticali)
+        // CONTAINER 2: CEDENTE/CESSIONARIO
         this.drawPartiesSection(doc, invoiceData);
 
         // CONTAINER 3: TABELLA ARTICOLI
@@ -84,7 +84,7 @@ export class PdfGeneratorService {
   }
 
   /**
-   * CONTAINER 1: Titolo con numero e data fattura
+   * CONTAINER 1: INTESTAZIONE e NUMERO-DATA FATTURA
    */
   private drawTitle(doc: any, invoiceData: InvoiceData): void {
     const startY = doc.y;
@@ -95,7 +95,6 @@ export class PdfGeneratorService {
     doc.fontSize(10).font('Helvetica').fillColor('#555')
       .text(`Numero: ${invoiceData.numero} | Data: ${invoiceData.data}`, 40, startY + 25, { align: 'center', width: 515 });
 
-    // Posiziona il cursore 50 px sotto il titolo (come avevi)
     doc.y = startY + 50;
 
     doc.save()
@@ -191,13 +190,13 @@ export class PdfGeneratorService {
   }
 
   /**
-   * CONTAINER 3: Tabella articoli con 8 colonne
+   * CONTAINER 3: TABELLA ARTICOLI
    */
   private drawItemsTable(doc: any, invoiceData: InvoiceData): void {
     const startY = doc.y;
     const rowHeight = 20;
 
-    // Definizione colonne ottimizzate
+    // Colonne/intestazioni
     const columns = [
       { label: 'Codice', x: 50, width: 50 },
       { label: 'Descrizione', x: 100, width: 200 },
@@ -237,7 +236,7 @@ export class PdfGeneratorService {
   }
 
   /**
-   * Formatta i numeri a 2 decimali
+   * Funzione per formattare i numeri a 2 decimali
    */
   private formatNumber(value: string | number): string {
     const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -245,14 +244,14 @@ export class PdfGeneratorService {
   }
 
   /**
-   * Sezione totali
+   * TOTALI
    */
   private drawTotals(doc: any, invoiceData: InvoiceData): void {
     doc.moveDown(1);
 
     doc.font('Helvetica-Bold').fontSize(11).fillColor('#333')
       .text(`Totale Imponibile: ${invoiceData.imponibile} €`);
-    doc.text(`IVA (${invoiceData.aliquota}%): ${invoiceData.imposta} €`);
+    doc.text(`IVA (${invoiceData.aliquota ?? '-' }%): ${invoiceData.imposta} €`);
     doc.fontSize(12).text(`TOTALE: ${invoiceData.totale} €`);
 
     if (invoiceData.modalitaPagamento) {
