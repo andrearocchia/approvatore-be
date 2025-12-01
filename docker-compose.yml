@@ -1,23 +1,33 @@
 version: '3.9'
 
 services:
-  postgres:
-    image: postgres:16
-    container_name: approvatore-db
-    restart: unless-stopped
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
     environment:
-      POSTGRES_USER: approvatore
-      POSTGRES_PASSWORD: approvatore_pwd
-      POSTGRES_DB: approvatore
+      DATABASE_URL: postgres://postgres:postgres@db:5432/invoicesdb
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: invoicesdb
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - approvatore_net
-
-networks:
-  approvatore_net:
 
 volumes:
   postgres_data:

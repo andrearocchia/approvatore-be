@@ -20,3 +20,85 @@ enum Role {
   segretario
   admin
 }
+
+model Invoice {
+  id                    Int      @id @default(autoincrement())
+  codiceUnico           Int      @unique @default(autoincrement())
+  stato                 StatoFattura @default(in_attesa)
+  note                  String   @default("")
+  
+  // Dati generali
+  numero                String
+  data                  String
+  tipoDocumento         String
+  divisa                String?
+  art73                 String
+  causale               String?
+  codiceDestinatario    String
+  pecDestinatario       String?
+  
+  // Cedente
+  cedenteNome           String
+  cedentePartitaIva     String
+  cedenteCodiceFiscale  String?
+  cedenteRegimeFiscale  String?
+  cedenteIndirizzo      String
+  cedenteNumeroCivico   String?
+  cedenteCap            String
+  cedenteComune         String
+  cedenteProvincia      String
+  cedenteNazione        String?
+  cedenteEmail          String?
+  cedenteTelefono       String?
+  cedenteREAUfficio     String?
+  cedenteREANumero      String?
+  cedenteREACapitale    String?
+  cedenteREASocioUnico  String?
+  cedenteREALiquidazione String?
+  
+  // Cessionario
+  cessionarioNome           String
+  cessionarioPartitaIva     String
+  cessionarioCodiceFiscale  String?
+  cessionarioIndirizzo      String
+  cessionarioNumeroCivico   String?
+  cessionarioCap            String
+  cessionarioComune         String
+  cessionarioProvincia      String
+  cessionarioNazione        String?
+  
+  // Totali
+  totale                String
+  imponibile            String
+  imposta               String
+  aliquota              String
+  esigibilitaIVA        String?
+  
+  // Pagamento
+  modalitaPagamento     String?
+  condizioniPagamento   String?
+  dettagliPagamento     String?
+  dataRiferimentoTerminiPagamento String?
+  giorniTerminiPagamento String?
+  scadenzaPagamento     String?
+  importoPagamento      String?
+  
+  // Terzo intermediario
+  terzoIntermediarioDenominazione String?
+  terzoIntermediarioPartitaIva    String?
+  terzoIntermediarioCodiceFiscale String?
+  
+  soggettoEmittente     String?
+  
+  // Linee (JSON)
+  linee                 String  // JSON stringificato
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+enum StatoFattura {
+  in_attesa
+  approvato
+  rifiutato
+}
