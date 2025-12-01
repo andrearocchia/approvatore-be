@@ -246,56 +246,72 @@ export class PdfGeneratorService {
    */
   private drawTotals(doc: any, invoiceData: InvoiceData): void {
     const startY = doc.y + 30;
-    const startX = 50;
+    const startX1 = 400;
+    const startX2 = 500;
 
     doc.save()
-      .moveTo(40, startY)      // x1, y
-      .lineTo(555, startY)     // x2, stesso y
+      .moveTo(50, startY)      // x1, y
+      .lineTo(startX2+55, startY)     // x2, stesso y
       .lineWidth(1)
       .strokeColor('#000000')
       .stroke()
       .restore();
 
     doc.font('Helvetica-Bold').fontSize(12).fillColor('#333')
-    .text(`TOTALI`, startX, startY + 10)
+    .text(`TOTALI`, startX1, startY + 10)
 
     let yPos = startY + 30;
     doc.font('Helvetica').fontSize(10).fillColor('#555')
-      .text(`Totale Imponibile:`, startX, yPos)
-      .text(`${invoiceData.imponibile} €`, 150, yPos);
-    yPos += 10;
-
-    doc.text(`IVA (${invoiceData.aliquota ?? '-' }%):`, startX, yPos);
-    doc.text(`${invoiceData.imposta} €`, 150, yPos);
+      .text(`Totale Imponibile:`, startX1, yPos)
+      .text(`${invoiceData.imponibile} €`, startX2, yPos);
     yPos += 15;
+
+    doc.text(`IVA (${invoiceData.aliquota ?? '-' }%):`, startX1, yPos);
+    doc.text(`${invoiceData.imposta} €`, startX2, yPos);
+    yPos += 20;
     
     doc.save()
-      .moveTo(startX, yPos)      // x1, y
-      .lineTo(200, yPos)     // x2, stesso y
+      .moveTo(startX1, yPos)      // x1, y
+      .lineTo(startX2+55, yPos)     // x2, stesso y
       .lineWidth(1)
       .strokeColor('#000000')
       .stroke()
       .restore();      
 
-    yPos += 10;
+    yPos += 15;
 
-    doc.text(`TOTALE:`, startX, yPos);
-    doc.text(`${invoiceData.totale} €`, 150, yPos);
-    yPos += 10;
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#333')
+      .text(`TOTALE:`, startX1, yPos);
+    doc.text(`${invoiceData.totale} €`, startX2, yPos);
+    yPos += 30;
+
+    doc.save()
+      .moveTo(startX1, yPos)      // x1, y
+      .lineTo(startX2+55, yPos)     // x2, stesso y
+      .lineWidth(1)
+      .strokeColor('#000000')
+      .stroke()
+      .restore();      
+
+    yPos += 15;
 
     if (invoiceData.modalitaPagamento) {
-      doc.moveDown(1);
-      doc.fontSize(10).font('Helvetica').fillColor('#555');
-      doc.text(`Modalità pagamento:`);
-      doc.text(`${invoiceData.modalitaPagamento}`);
+      doc.fontSize(10).font('Helvetica').fillColor('#555')
+        .text(`Modalità pagamento:`, startX1, yPos)
+        .text(`${invoiceData.modalitaPagamento}`, startX2, yPos);
+        yPos += 15;
       
       if (invoiceData.scadenzaPagamento) {
-        doc.text(`Scadenza:`);
-        doc.text(`${invoiceData.scadenzaPagamento}`);
+        doc.fontSize(10).font('Helvetica').fillColor('#555')
+          .text(`Scadenza:`, startX1, yPos)
+          .text(`${invoiceData.scadenzaPagamento}`, startX2, yPos);
+          yPos += 15;
       }
       if (invoiceData.importoPagamento) {
-        doc.text(`Importo:`);
-        doc.text(`${invoiceData.importoPagamento} €`);
+        doc.fontSize(10).font('Helvetica').fillColor('#555')
+          .text(`Importo da pagare:`, startX1, yPos)
+          .text(`${invoiceData.importoPagamento} €`, startX2, yPos);
+          yPos += 15;
       }
     }
   }
