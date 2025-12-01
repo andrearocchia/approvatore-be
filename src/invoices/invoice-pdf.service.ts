@@ -306,8 +306,8 @@ export class InvoicePdfService {
   // Parsing XML dalla directory
   // =============================
   public async parseAndSaveXmlFiles(): Promise<void> {
-    const folderPath = process.env.INVOICE_OUTPUT_DIR;
-    if (!folderPath) throw new Error('INVOICE_OUTPUT_DIR non definita');
+    const folderPath = process.env.XML_OUTPUT_DIR;
+    if (!folderPath) throw new Error('XML_OUTPUT_DIR non definita');
 
     const files = readdirSync(folderPath).filter(f => f.toLowerCase().endsWith('.xml'));
 
@@ -353,7 +353,7 @@ export class InvoicePdfService {
     // Aspetta che il PDF sia completamente scritto
     await this.pdfGenerator.generatePDF(pdfData, tempPath);
     
-    // Piccolo delay per sicurezza (il filesystem potrebbe non essere immediatamente sincronizzato)
+    // Piccolo delay così il filesystem è sincronizzato
     await new Promise(resolve => setTimeout(resolve, 100));
     
     const buffer = readFileSync(tempPath);

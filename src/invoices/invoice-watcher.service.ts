@@ -9,7 +9,7 @@ import { parseStringPromise } from 'xml2js';
 @Injectable()
 export class InvoiceWatcherService implements OnModuleInit {
   private readonly logger = new Logger(InvoiceWatcherService.name);
-  private readonly watchDir = process.env.INVOICE_OUTPUT_DIR || 'C:/Users/andrea.rocchia/Projects/progetto_eapproval/esempio_fatture/xml';
+  private readonly watchDir = process.env.XML_OUTPUT_DIR || 'C:/Users/andrea.rocchia/Projects/progetto_eapproval/esempio_fatture/xml';
 
   constructor(
     private readonly invoiceDb: InvoiceDbService,
@@ -17,7 +17,7 @@ export class InvoiceWatcherService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.logger.log(`Starting XML watcher on ${this.watchDir}`);
+    // this.logger.log(`Starting XML watcher on ${this.watchDir}`);
 
     const watcher = chokidar.watch(this.watchDir, {
       persistent: true,
@@ -31,7 +31,7 @@ export class InvoiceWatcherService implements OnModuleInit {
 
     watcher.on('add', async (filePath) => {
       if (path.extname(filePath).toLowerCase() !== '.xml') return;
-      this.logger.log(`New XML file detected: ${filePath}`);
+      // this.logger.log(`New XML file detected: ${filePath}`);
       
       try {
         const xmlContent = await fs.readFile(filePath, 'utf-8');
@@ -50,15 +50,15 @@ export class InvoiceWatcherService implements OnModuleInit {
 
         // Salva nel DB
         const codiceUnico = await this.invoiceDb.saveInvoice(invoiceData);
-        this.logger.log(`Invoice saved in DB with codiceUnico: ${codiceUnico}`);
+        // this.logger.log(`Invoice saved in DB with codiceUnico: ${codiceUnico}`);
 
         // Genera PDF
         await this.invoicePdf.generatePdf(invoiceData, codiceUnico);
-        this.logger.log(`PDF generated for invoice: ${codiceUnico}`);
+        // this.logger.log(`PDF generated for invoice: ${codiceUnico}`);
 
         // Cancella file XML
         await fs.remove(filePath);
-        this.logger.log(`XML file deleted: ${filePath}`);
+        // this.logger.log(`XML file deleted: ${filePath}`);
         
       } catch (err) {
         this.logger.error(`Error processing file ${filePath}`, err);
