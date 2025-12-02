@@ -81,7 +81,7 @@ export class InvoicesController {
   }
 
   @Get(':codiceUnico')
-  async getInvoiceById(@Param('codiceUnico') codiceUnico: string) {
+  async getInvoiceStatusAndNote(@Param('codiceUnico') codiceUnico: string) {
     try {
       const invoice = await this.invoiceDbService.getInvoiceById(parseInt(codiceUnico));
       
@@ -91,8 +91,11 @@ export class InvoicesController {
           HttpStatus.NOT_FOUND,
         );
       }
+
+      // Restituisci solo stato e note
+      const { stato, note } = invoice;
       
-      return { success: true, invoice };
+      return { success: true, stato, note };
     } catch (error) {
       console.error('Errore recupero fattura:', error.message);
       throw new HttpException(
