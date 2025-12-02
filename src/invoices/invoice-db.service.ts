@@ -116,6 +116,8 @@ export class InvoiceDbService {
   private mapToInvoice(dbInvoice: any): Invoice {
     return {
       id: dbInvoice.codiceUnico.toString(),
+      stato: dbInvoice.stato,
+      note: dbInvoice.note,
       numero: dbInvoice.numero,
       data: dbInvoice.data,
       tipoDocumento: dbInvoice.tipoDocumento,

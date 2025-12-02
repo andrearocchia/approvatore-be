@@ -7,6 +7,8 @@ import { InvoiceDbService } from './invoice-db.service';
 
 export interface Invoice {
   id: string;
+  stato: string;
+  note: string,
   numero: string;
   data: string;
   tipoDocumento: string;
@@ -162,6 +164,8 @@ export class InvoicePdfService {
 
     return {
       numero: this.safeGet(datiGenerali?.Numero),
+      stato: this.safeGet(rootKey, 'in_attesa'),
+      note: this.safeGet(rootKey, undefined),
       data: this.safeGet(datiGenerali?.Data),
       tipoDocumento: this.safeGet(datiGenerali?.TipoDocumento),
       divisa: this.safeGet(datiGenerali?.Divisa, undefined),
