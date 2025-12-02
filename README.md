@@ -141,8 +141,8 @@ Generazione professionale di PDF:
 **POST** `/auth/login`
 ```json
 {
-  "username": "approvatore1",
-  "password": "test123"
+  "username": "approvatore",
+  "password": "123"
 }
 ```
 Risposta:

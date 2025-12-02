@@ -124,7 +124,7 @@ export class InvoiceDbService {
       causale: dbInvoice.causale,
       codiceDestinatario: dbInvoice.codiceDestinatario,
       pecDestinatario: dbInvoice.pecDestinatario,
-      
+
       cedente: {
         nome: dbInvoice.cedenteNome,
         partitaIva: dbInvoice.cedentePartitaIva,
@@ -146,7 +146,7 @@ export class InvoiceDbService {
           statoLiquidazione: dbInvoice.cedenteREALiquidazione,
         } : undefined,
       },
-      
+
       cessionario: {
         nome: dbInvoice.cessionarioNome,
         partitaIva: dbInvoice.cessionarioPartitaIva,
@@ -158,15 +158,15 @@ export class InvoiceDbService {
         provincia: dbInvoice.cessionarioProvincia,
         nazione: dbInvoice.cessionarioNazione,
       },
-      
+
       linee: JSON.parse(dbInvoice.linee),
-      
+
       totale: dbInvoice.totale,
       imponibile: dbInvoice.imponibile,
       imposta: dbInvoice.imposta,
       aliquota: dbInvoice.aliquota,
       esigibilitaIVA: dbInvoice.esigibilitaIVA,
-      
+
       modalitaPagamento: dbInvoice.modalitaPagamento,
       condizioniPagamento: dbInvoice.condizioniPagamento,
       dettagliPagamento: dbInvoice.dettagliPagamento,
@@ -174,13 +174,13 @@ export class InvoiceDbService {
       giorniTerminiPagamento: dbInvoice.giorniTerminiPagamento,
       scadenzaPagamento: dbInvoice.scadenzaPagamento,
       importoPagamento: dbInvoice.importoPagamento,
-      
+
       terzoIntermediario: dbInvoice.terzoIntermediarioDenominazione ? {
         denominazione: dbInvoice.terzoIntermediarioDenominazione,
         partitaIva: dbInvoice.terzoIntermediarioPartitaIva,
         codiceFiscale: dbInvoice.terzoIntermediarioCodiceFiscale,
       } : undefined,
-      
+
       soggettoEmittente: dbInvoice.soggettoEmittente,
     };
   }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { parseStringPromise } from 'xml2js';
-import { readFileSync, unlinkSync, readdirSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PdfGeneratorService, InvoiceData } from './pdf-generator.service';
 import { InvoiceDbService } from './invoice-db.service';
@@ -85,14 +85,46 @@ export class InvoicePdfService {
     private readonly invoiceDb: InvoiceDbService,
   ) {}
 
-  // =============================
-  // Helper
-  // =============================
-  safeGet(obj: any, defaultValue = 'N/A'): string {
+  /**
+   * Metodo principale: elabora XML, salva in DB e genera PDF
+   * Restituisce il codiceUnico della fattura
+   */
+  async processXmlAndGeneratePdf(xmlContent: string): Promise<number> {
+    const cleanXml = this.cleanXmlContent(xmlContent);
+    const parsed = await parseStringPromise(cleanXml, { 
+      explicitArray: true, 
+      mergeAttrs: false, 
+      normalize: true, 
+      trim: true 
+    });
+    
+    const invoiceData = this.extractInvoiceData(parsed);
+    const codiceUnico = await this.invoiceDb.saveInvoice(invoiceData);
+    await this.generatePdf(invoiceData, codiceUnico);
+    
+    return codiceUnico;
+  }
+
+  /**
+   * Pulisce il contenuto XML da caratteri non validi
+   */
+  private cleanXmlContent(xmlContent: string): string {
+    return xmlContent
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+      .replace(/&(?!(?:amp|lt|gt|quot|apos);)/g, '&amp;');
+  }
+
+  /**
+   * Helper per estrarre valori in modo sicuro dall'XML parsato
+   */
+  private safeGet(obj: any, defaultValue = 'N/A'): string {
     if (!obj || (Array.isArray(obj) && obj.length === 0)) return defaultValue;
     return Array.isArray(obj) ? obj[0] : obj;
   }
 
+  /**
+   * Estrae i dati strutturati della fattura dall'XML parsato
+   */
   extractInvoiceData(parsedXML: any): Omit<Invoice, 'id'> {
     const rootKey = Object.keys(parsedXML).find(k => k.includes('FatturaElettronica'));
     if (!rootKey) throw new Error('Root FatturaElettronica non trovata');
@@ -102,42 +134,33 @@ export class InvoicePdfService {
     const body = root['FatturaElettronicaBody']?.[0] || root['p:FatturaElettronicaBody']?.[0];
     if (!header || !body) throw new Error('Header o Body mancanti');
 
-    // Dati Trasmissione
     const datiTrasmissione = header.DatiTrasmissione?.[0];
     
-    // Cedente/Prestatore
     const cedente = header.CedentePrestatore?.[0];
     const cedenteAnagrafica = cedente?.DatiAnagrafici?.[0];
     const cedenteSede = cedente?.Sede?.[0];
     const cedenteContatti = cedente?.Contatti?.[0];
     const cedenteREA = cedente?.IscrizioneREA?.[0];
     
-    // Cessionario/Committente
     const cessionario = header.CessionarioCommittente?.[0];
     const cessionarioAnagrafica = cessionario?.DatiAnagrafici?.[0];
     const cessionarioSede = cessionario?.Sede?.[0];
     
-    // Terzo Intermediario
     const terzoIntermediario = header.TerzoIntermediarioOSoggettoEmittente?.[0];
     const terzoAnagrafica = terzoIntermediario?.DatiAnagrafici?.[0];
     
-    // Soggetto Emittente
     const soggettoEmittente = header.SoggettoEmittente?.[0];
     
-    // Dati Generali Documento
     const datiGenerali = body.DatiGenerali?.[0]?.DatiGeneraliDocumento?.[0];
     
-    // Dati Beni Servizi
     const datiBeniServizi = body.DatiBeniServizi?.[0];
     const linee = datiBeniServizi?.DettaglioLinee || [];
     const riepilogo = datiBeniServizi?.DatiRiepilogo?.[0];
     
-    // Dati Pagamento
     const datiPagamento = body.DatiPagamento?.[0];
     const dettaglioPagamento = datiPagamento?.DettaglioPagamento?.[0];
 
     return {
-      // Dati Generali Documento
       numero: this.safeGet(datiGenerali?.Numero),
       data: this.safeGet(datiGenerali?.Data),
       tipoDocumento: this.safeGet(datiGenerali?.TipoDocumento),
@@ -145,11 +168,9 @@ export class InvoicePdfService {
       art73: this.safeGet(datiGenerali?.Art73, 'NO'),
       causale: this.safeGet(datiGenerali?.Causale, undefined),
       
-      // Dati Trasmissione
       codiceDestinatario: this.safeGet(datiTrasmissione?.CodiceDestinatario),
       pecDestinatario: this.safeGet(datiTrasmissione?.PECDestinatario, undefined),
       
-      // Cedente/Prestatore
       cedente: {
         nome: this.safeGet(cedenteAnagrafica?.Anagrafica?.[0]?.Denominazione),
         partitaIva: this.safeGet(cedenteAnagrafica?.IdFiscaleIVA?.[0]?.IdCodice),
@@ -172,7 +193,6 @@ export class InvoicePdfService {
         } : undefined,
       },
       
-      // Cessionario/Committente
       cessionario: {
         nome: this.safeGet(cessionarioAnagrafica?.Anagrafica?.[0]?.Denominazione),
         partitaIva: this.safeGet(cessionarioAnagrafica?.IdFiscaleIVA?.[0]?.IdCodice),
@@ -185,7 +205,6 @@ export class InvoicePdfService {
         nazione: this.safeGet(cessionarioSede?.Nazione, undefined),
       },
       
-      // Linee Dettaglio
       linee: linee.map(linea => ({
         numeroLinea: this.safeGet(linea.NumeroLinea, undefined),
         codiceArticolo: this.safeGet(linea.CodiceArticolo?.[0]?.CodiceValore, undefined),
@@ -198,14 +217,12 @@ export class InvoicePdfService {
         importo: this.safeGet(linea.PrezzoTotale || linea.ImportoLinea),
       })),
       
-      // Totali
       totale: this.safeGet(datiGenerali?.ImportoTotaleDocumento || riepilogo?.ImportoTotaleDocumento),
       imponibile: this.safeGet(riepilogo?.ImponibileImporto),
       imposta: this.safeGet(riepilogo?.Imposta),
       aliquota: this.safeGet(riepilogo?.AliquotaIVA),
       esigibilitaIVA: this.safeGet(riepilogo?.EsigibilitaIVA, undefined),
       
-      // Dati Pagamento
       modalitaPagamento: this.safeGet(dettaglioPagamento?.ModalitaPagamento, undefined),
       condizioniPagamento: this.safeGet(datiPagamento?.CondizioniPagamento, undefined),
       dettagliPagamento: this.safeGet(dettaglioPagamento?.Beneficiario, undefined),
@@ -214,21 +231,19 @@ export class InvoicePdfService {
       scadenzaPagamento: this.safeGet(dettaglioPagamento?.DataScadenzaPagamento, undefined),
       importoPagamento: this.safeGet(dettaglioPagamento?.ImportoPagamento, undefined),
       
-      // Terzo Intermediario
       terzoIntermediario: terzoIntermediario ? {
         denominazione: this.safeGet(terzoAnagrafica?.Anagrafica?.[0]?.Denominazione, undefined),
         partitaIva: this.safeGet(terzoAnagrafica?.IdFiscaleIVA?.[0]?.IdCodice, undefined),
         codiceFiscale: this.safeGet(terzoAnagrafica?.CodiceFiscale, undefined),
       } : undefined,
       
-      // Soggetto Emittente
       soggettoEmittente: this.safeGet(soggettoEmittente, undefined),
     };
   }
 
-  // =============================
-  // Conversione dati
-  // =============================
+  /**
+   * Converte i dati Invoice in formato InvoiceData per il PDF
+   */
   private convertToInvoiceData(invoiceData: Omit<Invoice, 'id'>): InvoiceData {
     return {
       numero: invoiceData.numero,
@@ -277,71 +292,10 @@ export class InvoicePdfService {
     };
   }
 
-  // =============================
-  // PDF
-  // =============================
-  public async convertXMLToPDF(xmlContent: string): Promise<Buffer> {
-    const cleanXml = xmlContent
-      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
-      .replace(/&(?!(?:amp|lt|gt|quot|apos);)/g, '&amp;');
-
-    const parsed = await parseStringPromise(cleanXml, { 
-      explicitArray: true, 
-      mergeAttrs: false, 
-      normalize: true, 
-      trim: true 
-    });
-    
-    const invoiceData = this.extractInvoiceData(parsed);
-    const pdfData = this.convertToInvoiceData(invoiceData);
-    
-    const tempPath = join(process.env.PDF_OUTPUT_DIR!, `fattura-${Date.now()}.pdf`);
-    await this.pdfGenerator.generatePDF(pdfData, tempPath);
-
-    const buffer = readFileSync(tempPath);
-    return buffer;
-  }
-
-  // =============================
-  // Parsing XML dalla directory
-  // =============================
-  public async parseAndSaveXmlFiles(): Promise<void> {
-    const folderPath = process.env.XML_OUTPUT_DIR;
-    if (!folderPath) throw new Error('XML_OUTPUT_DIR non definita');
-
-    const files = readdirSync(folderPath).filter(f => f.toLowerCase().endsWith('.xml'));
-
-    for (const fileName of files) {
-      const filePath = join(folderPath, fileName);
-      try {
-        const xmlContent = readFileSync(filePath, 'utf-8');
-        const cleanXml = xmlContent
-          .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
-          .replace(/&(?!(?:amp|lt|gt|quot|apos);)/g, '&amp;');
-
-        const parsed = await parseStringPromise(cleanXml, { 
-          explicitArray: true, 
-          mergeAttrs: false, 
-          normalize: true, 
-          trim: true 
-        });
-        
-        const invoiceData = this.extractInvoiceData(parsed);
-        const codiceUnico = await this.invoiceDb.saveInvoice(invoiceData);
-        
-        // Genera PDF
-        await this.generatePdf(invoiceData, codiceUnico);
-        
-        // Cancella il file XML
-        unlinkSync(filePath);
-        
-      } catch (err) {
-        console.error(`Errore parsing ${fileName}:`, err.message);
-      }
-    }
-  }
-
-  public async generatePdf(invoiceData: Omit<Invoice, 'id'>, codiceUnico?: number): Promise<Buffer> {
+  /**
+   * Genera il PDF della fattura
+   */
+  async generatePdf(invoiceData: Omit<Invoice, 'id'>, codiceUnico?: number): Promise<Buffer> {
     const pdfData = this.convertToInvoiceData(invoiceData);
     
     const outputDir = process.env.PDF_OUTPUT_DIR!;
@@ -350,10 +304,9 @@ export class InvoicePdfService {
       : `fattura-${Date.now()}.pdf`;
     const tempPath = join(outputDir, fileName);
     
-    // Aspetta che il PDF sia completamente scritto
     await this.pdfGenerator.generatePDF(pdfData, tempPath);
     
-    // Piccolo delay così il filesystem è sincronizzato
+    // Piccolo delay per sincronizzazione filesystem
     await new Promise(resolve => setTimeout(resolve, 100));
     
     const buffer = readFileSync(tempPath);
