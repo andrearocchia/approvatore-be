@@ -7,10 +7,10 @@ import {
   Param, 
   Patch,
   UseInterceptors,
-  UploadedFile,
+  UploadedFiles,
   Body
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceDbService } from './invoice-db.service';
 import { StatoFattura } from '@prisma/client';
@@ -25,26 +25,46 @@ export class InvoicesController {
   ) {}
 
   @Post('xmlApprove')
-  @UseInterceptors(FileInterceptor('file'))
-  async convertXmlToPdf(@UploadedFile() file: Express.Multer.File) {
+  @UseInterceptors(FilesInterceptor('file', 10))
+  async convertXmlToPdf(@UploadedFiles() files: Express.Multer.File[]) {
     try {
-      if (!file) {
+      if (!files || files.length === 0) {
         throw new HttpException(
-          { success: false, message: 'File XML mancante' },
+          { success: false, message: 'Nessun file XML caricato' },
           HttpStatus.BAD_REQUEST
         );
       }
 
-      const xmlContent = file.buffer.toString('utf-8');
-      const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(xmlContent);
+      const results: { success: true; codiceUnico: number; filename: string }[] = [];
+      const errors: { success: false; filename: string; message: string }[] = [];
+
+      for (const file of files) {
+        try {
+          const xmlContent = file.buffer.toString('utf-8');
+          const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(xmlContent);
+          results.push({ 
+            success: true, 
+            codiceUnico, 
+            filename: file.originalname 
+          });
+        } catch (error) {
+          errors.push({ 
+            success: false, 
+            filename: file.originalname, 
+            message: error.message 
+          });
+        }
+      }
 
       return {
-        success: true,
-        codiceUnico,
-        message: 'Fattura elaborata con successo'
+        success: errors.length === 0,
+        processed: results.length,
+        failed: errors.length,
+        results,
+        errors
       };
     } catch (error) {
-      console.error('Errore elaborazione fattura:', error.message);
+      console.error('Errore elaborazione fatture:', error.message);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.BAD_REQUEST,
@@ -92,7 +112,6 @@ export class InvoicesController {
         );
       }
 
-      // Restituisci solo stato e note
       const { stato, note } = invoice;
       
       return { success: true, stato, note };
