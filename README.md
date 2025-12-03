@@ -25,51 +25,42 @@ Backend per la gestione del sistema di approvazione documentale con elaborazione
 
 1. **Clonare il repository**
    ```bash
-   git clone [https://github.com/andrearocchia/approvatore-be](https://github.com/andrearocchia/approvatore-be)
+   git clone https://github.com/andrearocchia/approvatore-be
    cd approvatore-backend
-    ````
+   ```
 
-2.  **Installare le dipendenze**
+2. **Installare le dipendenze**
+   ```bash
+   npm install
+   ```
 
-    ```bash
-    npm install
-    ```
+3. **Configurare le variabili di ambiente**
+   
+   Creare un file `.env` nella radice del progetto:
+   ```env
+   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/invoicesdb?schema=public"
+   JWT_SECRET="your-secret-key"
+   JWT_EXPIRES_IN="3600"
+   CORS_URL="http://localhost:5173"
+   PDF_OUTPUT_DIR="/path/to/pdf/output"
+   ```
 
-3.  **Configurare le variabili di ambiente**
-    Creare un file `.env` nella radice del progetto:
+4. **Avviare il container PostgreSQL** (se si usa Docker)
+   ```bash
+   docker-compose up -d
+   ```
 
-    ```
-    DATABASE_URL=postgresql://user:password@localhost:5432/invoicesdb?schema=public
+5. **Eseguire le migrazioni del database**
+   ```bash
+   npx prisma migrate dev --name init
+   ```
 
-    JWT_SECRET=LaTuaChiaveSegretaPerIJWT
-    JWT_EXPIRES_IN=3600
+6. **Avviare l'applicazione in modalità sviluppo**
+   ```bash
+   npm run start:dev
+   ```
 
-    CORS_URL=http://localhost:5173
-
-    # Directory di input dove il sistema cerca i file XML quando triggerato manualmente
-    XML_INPUT_DIR=/path/to/xml/invoices
-
-    # Directory di output per i PDF generati
-    PDF_OUTPUT_DIR=/path/to/pdf/output
-    ```
-
-4.  **Avviare il container PostgreSQL** (se si usa Docker)
-
-    ```bash
-    docker-compose up -d
-    ```
-
-5.  **Eseguire le migrazioni del database**
-
-    ```bash
-    npx prisma migrate dev --name init
-    ```
-
-6.  **Avviare l'applicazione in modalità sviluppo**
-
-    ```bash
-    npm run start:dev
-    ```
+L'applicazione sarà disponibile su `http://localhost:3000`
 
 ## Struttura del Progetto
 
@@ -78,7 +69,6 @@ src/
 ├── auth/                      # Modulo autenticazione
 │   ├── auth.service.ts
 │   ├── auth.controller.ts
-│   ├── auth.module.ts
 │   ├── jwt.strategy.ts
 │   ├── jwt-auth.guard.ts
 │   ├── roles.guard.ts
@@ -90,9 +80,9 @@ src/
 ├── invoices/                  # Modulo fatture elettroniche
 │   ├── invoices.controller.ts
 │   ├── invoices.module.ts
-│   ├── invoice-pdf.service.ts       # Parsing XML e conversione
-│   ├── invoice-db.service.ts        # Persistenza database
-│   └── pdf-generator.service.ts     # Generazione PDF
+│   ├── invoice-pdf.service.ts
+│   ├── invoice-db.service.ts
+│   └── pdf-generator.service.ts
 ├── prisma/                    # Configurazione database
 │   ├── prisma.service.ts
 │   └── prisma.module.ts
@@ -103,108 +93,279 @@ src/
 ## Autenticazione e Autorizzazione
 
 ### JWT Strategy
+
 L'autenticazione avviene tramite JWT (JSON Web Tokens) estratti dall'header `Authorization: Bearer <token>`.
-### Funzionalità Principali
 
 **Flusso di login:**
 1. Client invia credenziali (username, password)
 2. Backend valida le credenziali con bcrypt
 3. Se valide, genera un JWT con payload: `{ sub, username, role }`
 4. Token inviato al client con scadenza configurabile (default: 3600s)
-Il sistema elabora automaticamente le fatture elettroniche in formato XML (FatturaPA) seguendo questo workflow:
 
 ### Guards
+
 - **JwtAuthGuard** - Protegge le rotte richiedendo un token valido
 - **RolesGuard** - Controlla che il ruolo dell'utente sia autorizzato per la risorsa
-1. **Monitoring automatico** - Il servizio `InvoiceWatcherService` monitora la directory configurata (`XML_OUTPUT_DIR`)
-2. **Parsing XML** - Estrazione dati dalla fattura elettronica secondo lo standard FatturaPA
-3. **Salvataggio Database** - Memorizzazione strutturata dei dati fattura con codice univoco progressivo
-4. **Generazione PDF** - Creazione automatica di un PDF formattato per visualizzazione
-5. **Cleanup** - Rimozione automatica del file XML dopo elaborazione
+
+### Ruoli Disponibili
+
+```typescript
+enum Role {
+  approvatore  // Può approvare/rifiutare fatture
+  segretario   // Può caricare e visualizzare fatture
+  admin        // Accesso completo al sistema
+}
+```
 
 ### Decorator Ruoli
+
 ```typescript
-@Roles('admin', 'approver')
+@Roles('admin', 'approvatore')
 @Get('/protected')
 protectedRoute() { ... }
 ```
 
 ## Sistema di Gestione Fatture Elettroniche
 
-### Funzionalità Principali
+### Workflow Elaborazione
 
-Il sistema gestisce l'elaborazione delle fatture elettroniche in formato XML (FatturaPA) tramite chiamate API dedicate o trigger manuali per file presenti su disco, seguendo questo workflow:
+Il sistema gestisce l'elaborazione delle fatture elettroniche in formato XML (FatturaPA):
 
-1.  **Inizializzazione Elaborazione** - L'elaborazione dei file XML viene avviata tramite l'endpoint a cui possibile inviare direttamente il contenuto XML tramite **`POST /invoices/xml-to-pdf`**.
-2.  **Parsing XML** - Estrazione dei dati strutturati dalla fattura elettronica secondo lo standard FatturaPA.
-3.  **Salvataggio Database** - Memorizzazione strutturata dei dati fattura con codice univoco progressivo (stato iniziale: **in\_attesa**).
-4.  **Generazione PDF** - Creazione automatica di un PDF formattato per visualizzazione.
-5.  **Cleanup** - Rimozione del file XML sorgente dopo l'avvenuta elaborazione (integrata nella logica di parsing batch).
+1. **Caricamento XML** - Upload del file XML tramite endpoint dedicato
+2. **Parsing XML** - Estrazione dati strutturati secondo standard FatturaPA
+3. **Salvataggio Database** - Memorizzazione con codice univoco progressivo (stato: `in_attesa`)
+4. **Generazione PDF** - Creazione automatica PDF formattato
+5. **Approvazione** - Workflow di revisione con cambio stato (`approvato`/`rifiutato`)
 
-### Architettura dei Servizi (Modulo `invoices/`)
+### Architettura dei Servizi
 
-| Servizio | Responsabilità Principale | Tecnologie Chiave |
-| :--- | :--- | :--- |
-| **InvoicePdfService** | Parsing dei file XML (FatturaPA), estrazione dei dati strutturati, conversione XML-to-PDF e logica di processing batch. | `xml2js`, `fs` |
-| **InvoiceDbService** | Gestione completa della persistenza nel database (CRUD, aggiornamento stato, recupero filtri). | `Prisma` |
-| **PdfGeneratorService** | Logica di formattazione e composizione del layout PDF professionale. | `PDFKit` |
+| Servizio | Responsabilità | Tecnologie |
+|----------|----------------|------------|
+| **InvoicePdfService** | Parsing XML, estrazione dati, conversione XML-to-PDF | xml2js, fs |
+| **InvoiceDbService** | Persistenza database (CRUD, gestione stati) | Prisma |
+| **PdfGeneratorService** | Generazione layout PDF professionale | PDFKit |
 
-### API Endpoints: Fatture
+## API Endpoints
 
-Tutti gli endpoint per la gestione delle fatture sono protetti da **JWT Strategy** e **RolesGuard** e richiedono un token valido.
+### Autenticazione
 
-| Metodo | Endpoint | Descrizione | Dettagli |
-| :--- | :--- | :--- | :--- |
-| **POST** | `/invoices/xml-to-pdf` | Converte un file XML (inviare come form-data) in un PDF in formato base64, salva la fattura nel DB e restituisce il codice univoco. | Upload/Processo immediato. |
-| **POST** | `/invoices/parse-xml-files` | **Trigger manuale:** Avvia il parsing e salvataggio di tutti i file XML presenti in `XML_INPUT_DIR`. | Usato per elaborazioni batch. |
-| **GET** | `/invoices/all` | Recupera l'elenco completo di tutte le fatture nel DB. | |
-| **GET** | `/invoices/standby` | Recupera solo le fatture con stato **`in_attesa`** di approvazione. | |
-| **GET** | `/invoices/:codiceUnico` | Ritorna lo 'stato' e le 'note' una singola fattura tramite il suo codice univoco. | |
-| **GET** | `/invoices/:codiceUnico/pdf`| Recupera il PDF generato della fattura in formato base64. | |
-| **PATCH**| `/invoices/:codiceUnico/status`| **Aggiorna lo stato di approvazione** della fattura. | Stati validi: `approvato`, `rifiutato`, `in_attesa`. |
+| Metodo | Endpoint | Descrizione |
+|--------|----------|-------------|
+| POST | `/auth/login` | Login utente, restituisce JWT token |
+
+### Fatture
+
+Tutti gli endpoint richiedono autenticazione JWT tramite header `Authorization: Bearer <token>`.
+
+| Metodo | Endpoint | Descrizione |
+|--------|----------|-------------|
+| POST | `/invoices/xmlApprove` | Upload e elaborazione file XML |
+| GET | `/invoices/all` | Recupera tutte le fatture |
+| GET | `/invoices/standby` | Recupera fatture in attesa di approvazione |
+| GET | `/invoices/:codiceUnico` | Recupera stato e note di una fattura |
+| GET | `/invoices/:codiceUnico/pdf` | Recupera PDF in formato base64 |
+| PATCH | `/invoices/:codiceUnico/status` | Aggiorna stato fattura |
+
+### Dettaglio Endpoint Principali
+
+#### POST `/invoices/xmlApprove`
+
+Upload e elaborazione fattura elettronica.
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- Body: `file` (file XML)
+
+**Response:**
+```json
+{
+  "success": true,
+  "codiceUnico": 123,
+  "message": "Fattura elaborata con successo"
+}
+```
+
+#### GET `/invoices/:codiceUnico`
+
+Recupera stato e note di una fattura specifica.
+
+**Response:**
+```json
+{
+  "success": true,
+  "stato": "approvato",
+  "note": "Fattura verificata e approvata"
+}
+```
+
+Stati possibili: `in_attesa`, `approvato`, `rifiutato`
+
+#### PATCH `/invoices/:codiceUnico/status`
+
+Aggiorna lo stato di approvazione.
+
+**Request Body:**
+```json
+{
+  "stato": "approvato",
+  "note": "Fattura verificata e approvata"
+}
+```
+
+#### GET `/invoices/:codiceUnico/pdf`
+
+Recupera il PDF generato della fattura.
+
+**Response:**
+```json
+{
+  "success": true,
+  "pdf": "base64-encoded-pdf-content",
+  "filename": "fattura-123-1234567890.pdf"
+}
+```
 
 ## Database Schema
 
-### Invoice Model (Sintesi)
-
-Il modello `Invoice` memorizza tutti i dati estratti dalla Fattura Elettronica.
+### Invoice Model
 
 ```prisma
 model Invoice {
   id                    Int          @id @default(autoincrement())
-  codiceUnico           Int          @unique @default(autoincrement()) // Codice univoco progressivo
-  stato                 StatoFattura @default(in_attesa)              // Stato del workflow
-  note                  String       @default("")                      // Note di approvazione/rifiuto
+  codiceUnico           Int          @unique @default(autoincrement())
+  stato                 StatoFattura @default(in_attesa)
+  note                  String       @default("")
   
-  // ... (Dati anagrafici, totali, etc.)
+  // Dati generali fattura
+  numero                String
+  data                  String
+  tipoDocumento         String
+  divisa                String?
+  art73                 String
+  causale               String?
+  codiceDestinatario    String
+  pecDestinatario       String?
   
-  linee                 String  // Array JSON stringificato dei dettagli linee
+  // Dati cedente (fornitore)
+  cedenteNome           String
+  cedentePartitaIva     String
+  cedenteCodiceFiscale  String?
+  cedenteRegimeFiscale  String?
+  cedenteIndirizzo      String
+  cedenteNumeroCivico   String?
+  cedenteCap            String
+  cedenteComune         String
+  cedenteProvincia      String
+  cedenteNazione        String?
+  cedenteEmail          String?
+  cedenteTelefono       String?
+  cedenteREAUfficio     String?
+  cedenteREANumero      String?
+  cedenteREACapitale    String?
+  cedenteREASocioUnico  String?
+  cedenteREALiquidazione String?
+  
+  // Dati cessionario (cliente)
+  cessionarioNome           String
+  cessionarioPartitaIva     String
+  cessionarioCodiceFiscale  String?
+  cessionarioIndirizzo      String
+  cessionarioNumeroCivico   String?
+  cessionarioCap            String
+  cessionarioComune         String
+  cessionarioProvincia      String
+  cessionarioNazione        String?
+  
+  // Totali
+  totale                String
+  imponibile            String
+  imposta               String
+  aliquota              String
+  esigibilitaIVA        String?
+  
+  // Pagamento
+  modalitaPagamento     String?
+  condizioniPagamento   String?
+  dettagliPagamento     String?
+  dataRiferimentoTerminiPagamento String?
+  giorniTerminiPagamento String?
+  scadenzaPagamento     String?
+  importoPagamento      String?
+  
+  // Terzo intermediario
+  terzoIntermediarioDenominazione String?
+  terzoIntermediarioPartitaIva    String?
+  terzoIntermediarioCodiceFiscale String?
+  
+  soggettoEmittente     String?
+  
+  // Linee fattura (JSON)
+  linee                 String
   
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
 
 enum StatoFattura {
-  in_attesa // In attesa di revisione da parte dell'approvatore
-  approvato // Fattura verificata e accettata
-  rifiutato // Fattura scartata
+  in_attesa   # In attesa di revisione
+  approvato   # Fattura approvata
+  rifiutato   # Fattura rifiutata
 }
 ```
 
-## Workflow Elaborazione Fatture
+### User Model
 
+```prisma
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+}
+
+enum Role {
+  approvatore
+  segretario
+  admin
+}
 ```
-1. Chiamata API POST /invoices/parse-xml-files (Trigger Manuale)
-  
-2. Parsing XML → Estrazione dati strutturati
-  
-3. Salvataggio in database (stato: in_attesa)
-  
-4. Generazione PDF automatica
-  
-5. Rimozione file XML originale (integrata nel service di parsing)
-  
-6. Approvatore visualizza e valuta
-  
-7. Aggiornamento stato (approvato/rifiutato)
+
+## Deployment
+
+Il backend include configurazione per servire il frontend buildato dalla cartella `public`:
+
+```typescript
+// Serve file statici
+app.useStaticAssets(publicPath, { prefix: '/' });
+
+// SPA fallback per routing client-side
+app.use((req, res, next) => {
+  if (!req.url.startsWith('/auth') && 
+      !req.url.startsWith('/users') && 
+      !req.url.startsWith('/invoices') &&
+      !req.url.includes('.')) {
+    res.sendFile(join(publicPath, 'index.html'));
+  } else {
+    next();
+  }
+});
 ```
+
+### CORS
+
+Il backend supporta CORS configurabile tramite variabile d'ambiente `CORS_URL`. Origini consentite di default:
+- `http://localhost:5173`
+- `http://localhost:3000`
+- Origine configurata in `.env`
+
+## Integrazione ARCA
+
+Per l'integrazione con il sistema ARCA, consultare la documentazione dedicata: **[ARCA.md](./ARCA.md)**
+
+La documentazione ARCA include:
+- Dettagli autenticazione JWT
+- Endpoint `/invoices/xmlApprove` per caricamento fatture
+- Endpoint `/invoices/:codiceUnico` per verifica stato
+- Esempi pratici di integrazione in Python, Node.js
+- Workflow completo e best practices

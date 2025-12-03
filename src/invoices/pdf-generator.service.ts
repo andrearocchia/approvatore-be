@@ -1,76 +1,44 @@
 import { Injectable } from '@nestjs/common';
 import { createWriteStream } from 'fs';
+import { Invoice } from './invoice-pdf.service';
 
 const PDFDocument = require('pdfkit');
 
-export interface InvoiceData {
-  numero: string;
-  data: string;
-  tipoDocumento: string;
-  art73: string;
-  codiceDestinatario: string;
-  cedente: {
-    nome: string;
-    partitaIva: string;
-    codiceFiscale?: string;
-    regimeFiscale?: string;
-    indirizzo: string;
-    cap: string;
-    comune: string;
-    provincia: string;
-    email: string;
-    telefono: string;
-  };
-  cessionario: {
-    nome: string;
-    partitaIva: string;
-    indirizzo: string;
-    cap: string;
-    comune: string;
-    provincia: string;
-  };
-  linee: {
-    codiceArticolo?: string;
-    descrizione: string;
-    quantita: string;
-    prezzoUnitario: string;
-    unitaMisura?: string;
-    scontoMaggiorazione?: string;
-    aliquotaIva?: string;
-    importo: string;
-  }[];
-  totale: string;
-  imponibile: string;
-  imposta: string;
-  aliquota: string;
-  modalitaPagamento?: string;
-  dettagliPagamento?: string;
-  scadenzaPagamento?: string;
-  importoPagamento?: string;
-}
-
 @Injectable()
 export class PdfGeneratorService {
+
+  // STYLES CENTRALIZZATI
+  private readonly STYLES = {
+    title: { size: 20, font: 'Helvetica-Bold', color: '#333' },
+    subtitle: { size: 10, font: 'Helvetica', color: '#555' },
+    sectionTitle: { size: 10, font: 'Helvetica-Bold', color: '#333' },
+    body: { size: 8, font: 'Helvetica', color: '#555' },
+    table: { size: 9, font: 'Helvetica', color: '#555' },
+    tableHeader: { size: 9, font: 'Helvetica-Bold', color: '#333' },
+    rowHeight: 20,
+    margins: { page: 40, section: 20 }
+  };
+
+  // Helper per applicare gli stili
+  private applyStyle(doc: any, styleKey: keyof PdfGeneratorService['STYLES']) {
+    const s = this.STYLES[styleKey] as any;
+    if (!s.size) return; // evita errori sui valori numerici come rowHeight
+    doc.fontSize(s.size).font(s.font).fillColor(s.color);
+  }
+
   /**
    * Genera un PDF a partire dai dati della fattura
    */
-  public generatePDF(invoiceData: InvoiceData, outputPath: string): Promise<void> {
+  public generatePDF(invoiceData: Omit<Invoice, 'id'>, outputPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({ size: 'A4', margin: 40 });
         const stream = createWriteStream(outputPath);
         doc.pipe(stream);
 
-        // CONTAINER 1: INTESTAZIONE
         this.drawTitle(doc, invoiceData);
-
-        // CONTAINER 2: CEDENTE/CESSIONARIO
         this.drawPartiesSection(doc, invoiceData);
-
-        // CONTAINER 3: TABELLA ARTICOLI
         this.drawItemsTable(doc, invoiceData);
-
-        // TOTALI
         this.drawTotals(doc, invoiceData);
 
         doc.end();
@@ -84,22 +52,22 @@ export class PdfGeneratorService {
   }
 
   /**
-   * CONTAINER 1: INTESTAZIONE e NUMERO-DATA FATTURA
+   * CONTAINER 1: INTESTAZIONE
    */
-  private drawTitle(doc: any, invoiceData: InvoiceData): void {
+  private drawTitle(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
     const startY = doc.y;
 
-    doc.fontSize(20).font('Helvetica-Bold').fillColor('#333')
-      .text('FATTURA ELETTRONICA', 40, startY, { align: 'center', width: 515 });
+    this.applyStyle(doc, 'title');
+    doc.text('FATTURA ELETTRONICA', 40, startY, { align: 'center', width: 515 });
 
-    doc.fontSize(10).font('Helvetica').fillColor('#555')
-      .text(`Numero: ${invoiceData.numero} | Data: ${invoiceData.data}`, 40, startY + 25, { align: 'center', width: 515 });
+    this.applyStyle(doc, 'subtitle');
+    doc.text(`Numero: ${invoiceData.numero} | Data: ${invoiceData.data}`, 40, startY + 25, { align: 'center', width: 515 });
 
     doc.y = startY + 50;
 
     doc.save()
-      .moveTo(40, doc.y)      // x1, y
-      .lineTo(555, doc.y)     // x2, stesso y
+      .moveTo(40, doc.y)
+      .lineTo(555, doc.y)
       .lineWidth(1)
       .strokeColor('#000000')
       .stroke()
@@ -111,15 +79,14 @@ export class PdfGeneratorService {
   /**
    * CONTAINER 2: CEDENTE/PRESTATORE e CESSIONARIO/COMMITTENTE
    */
-  private drawPartiesSection(doc: any, invoiceData: InvoiceData): void {
+  private drawPartiesSection(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
     const startY = doc.y;
 
-    // SEZIONE SUPERIORE: CEDENTE/PRESTATORE
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#333')
-      .text('FORNITORE', 50, startY);
+    this.applyStyle(doc, 'sectionTitle');
+    doc.text('FORNITORE', 50, startY);
 
     let yPos = startY + 17;
-    doc.font('Helvetica').fontSize(8).fillColor('#555');
+    this.applyStyle(doc, 'body');
 
     doc.text(`Denominazione:`, 50, yPos);
     doc.text(`${invoiceData.cedente.nome}`, 150, yPos);
@@ -150,37 +117,46 @@ export class PdfGeneratorService {
     doc.text(`Cap:`, 50, yPos);
     doc.text(`${invoiceData.cedente.cap}`, 150, yPos);
     yPos += 10;
-    doc.text(`Telefono:`, 50, yPos);
-    doc.text(`${invoiceData.cedente.telefono}`, 150, yPos);
-    yPos += 10;
-    doc.text(`Email:`, 50, yPos);
-    doc.text(`${invoiceData.cedente.email}`, 150, yPos);
 
-    // SEZIONE INFERIORE: CESSIONARIO/COMMITTENTE
+    if (invoiceData.cedente.telefono) {
+      doc.text(`Telefono:`, 50, yPos);
+      doc.text(`${invoiceData.cedente.telefono}`, 150, yPos);
+      yPos += 10;
+    }
+
+    if (invoiceData.cedente.email) {
+      doc.text(`Email:`, 50, yPos);
+      doc.text(`${invoiceData.cedente.email}`, 150, yPos);
+    }
+
     yPos += 20;
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#333')
-      .text('CLIENTE', 50, yPos);
+
+    this.applyStyle(doc, 'sectionTitle');
+    doc.text('CLIENTE', 50, yPos);
 
     yPos += 17;
-    doc.font('Helvetica').fontSize(8).fillColor('#555');
+    this.applyStyle(doc, 'body');
 
     doc.text(`Denominazione:`, 50, yPos);
     doc.text(`${invoiceData.cessionario.nome}`, 150, yPos);
     yPos += 10;
+
     doc.text(`Identificativo fiscale:`, 50, yPos);
     doc.text(`${invoiceData.cessionario.partitaIva}`, 150, yPos);
     yPos += 10;
+
     doc.text(`Indirizzo:`, 50, yPos);
     doc.text(`${invoiceData.cessionario.indirizzo}`, 150, yPos);
     yPos += 10;
+
     doc.text(`Comune:`, 50, yPos);
     doc.text(`${invoiceData.cessionario.comune}`, 150, yPos);
 
     doc.y = yPos + 20;
 
     doc.save()
-      .moveTo(40, doc.y)      // x1, y
-      .lineTo(555, doc.y)     // x2, stesso y
+      .moveTo(40, doc.y)
+      .lineTo(555, doc.y)
       .lineWidth(1)
       .strokeColor('#000000')
       .stroke()
@@ -192,11 +168,9 @@ export class PdfGeneratorService {
   /**
    * CONTAINER 3: TABELLA ARTICOLI
    */
-  private drawItemsTable(doc: any, invoiceData: InvoiceData): void {
+  private drawItemsTable(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
     const startY = doc.y;
-    const rowHeight = 20;
 
-    // Colonne/intestazioni
     const columns = [
       { label: 'Codice', x: 50, width: 50 },
       { label: 'Descrizione', x: 100, width: 200 },
@@ -208,33 +182,31 @@ export class PdfGeneratorService {
       { label: 'Totale', x: 485, width: 65 }
     ];
 
-    // Header
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#333');
+    this.applyStyle(doc, 'tableHeader');
     columns.forEach(col => {
       doc.text(col.label, col.x, startY);
     });
 
-    let currentY = startY + rowHeight;
+    let currentY = startY + this.STYLES.rowHeight;
 
-    // Righe dati
-    doc.font('Helvetica').fontSize(9).fillColor('#555');
+    this.applyStyle(doc, 'table');
 
     invoiceData.linee.forEach((linea) => {
       doc.text(linea.codiceArticolo || '-', columns[0].x, currentY, { width: columns[0].width });
       doc.text(linea.descrizione, columns[1].x, currentY, { width: columns[1].width });
-      doc.text(this.formatNumber(linea.quantita), columns[2].x, currentY, { width: columns[2].width });
-      doc.text(this.formatNumber(linea.prezzoUnitario), columns[3].x, currentY, { width: columns[3].width });
-      doc.text(linea.unitaMisura || '-', columns[4].x, currentY, { width: columns[4].width });
-      doc.text(linea.scontoMaggiorazione ? this.formatNumber(linea.scontoMaggiorazione) : '-', columns[5].x, currentY, { width: columns[5].width });
-      doc.text(linea.aliquotaIva ? this.formatNumber(linea.aliquotaIva) : '-', columns[6].x, currentY, { width: columns[6].width });
-      doc.text(this.formatNumber(linea.importo), columns[7].x, currentY, { width: columns[7].width });
+      doc.text(this.formatNumber(linea.quantita), columns[2].x, currentY);
+      doc.text(this.formatNumber(linea.prezzoUnitario), columns[3].x, currentY);
+      doc.text(linea.unitaMisura || '-', columns[4].x, currentY);
+      doc.text(linea.scontoMaggiorazione ? this.formatNumber(linea.scontoMaggiorazione) : '-', columns[5].x, currentY);
+      doc.text(linea.aliquotaIva ? this.formatNumber(linea.aliquotaIva) : '-', columns[6].x, currentY);
+      doc.text(this.formatNumber(linea.importo), columns[7].x, currentY);
 
-      currentY += rowHeight;
+      currentY += this.STYLES.rowHeight;
     });
   }
 
   /**
-   * Funzione per formattare i numeri a 2 decimali
+   * Format numeri
    */
   private formatNumber(value: string | number): string {
     const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -244,74 +216,74 @@ export class PdfGeneratorService {
   /**
    * TOTALI
    */
-  private drawTotals(doc: any, invoiceData: InvoiceData): void {
+  private drawTotals(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
     const startY = doc.y + 30;
     const startX1 = 400;
     const startX2 = 500;
 
     doc.save()
-      .moveTo(50, startY)      // x1, y
-      .lineTo(startX2+55, startY)     // x2, stesso y
+      .moveTo(50, startY)
+      .lineTo(startX2 + 55, startY)
       .lineWidth(1)
       .strokeColor('#000000')
       .stroke()
       .restore();
 
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#333')
-    .text(`TOTALI`, startX1, startY + 10)
+    this.applyStyle(doc, 'sectionTitle');
+    doc.text(`TOTALI`, startX1, startY + 10);
 
     let yPos = startY + 30;
-    doc.font('Helvetica').fontSize(10).fillColor('#555')
-      .text(`Totale Imponibile:`, startX1, yPos)
-      .text(`${invoiceData.imponibile} €`, startX2, yPos);
+
+    this.applyStyle(doc, 'subtitle');
+    doc.text(`Totale Imponibile:`, startX1, yPos);
+    doc.text(`${invoiceData.imponibile} €`, startX2, yPos);
     yPos += 15;
 
-    doc.text(`IVA (${invoiceData.aliquota ?? '-' }%):`, startX1, yPos);
+    doc.text(`IVA (${invoiceData.aliquota ?? '-'}%):`, startX1, yPos);
     doc.text(`${invoiceData.imposta} €`, startX2, yPos);
     yPos += 20;
-    
+
     doc.save()
-      .moveTo(startX1, yPos)      // x1, y
-      .lineTo(startX2+55, yPos)     // x2, stesso y
+      .moveTo(startX1, yPos)
+      .lineTo(startX2 + 55, yPos)
       .lineWidth(1)
       .strokeColor('#000000')
       .stroke()
-      .restore();      
+      .restore();
 
     yPos += 15;
 
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#333')
-      .text(`TOTALE:`, startX1, yPos);
+    this.applyStyle(doc, 'sectionTitle');
+    doc.text(`TOTALE:`, startX1, yPos);
     doc.text(`${invoiceData.totale} €`, startX2, yPos);
+
     yPos += 30;
 
     doc.save()
-      .moveTo(startX1, yPos)      // x1, y
-      .lineTo(startX2+55, yPos)     // x2, stesso y
+      .moveTo(startX1, yPos)
+      .lineTo(startX2 + 55, yPos)
       .lineWidth(1)
       .strokeColor('#000000')
       .stroke()
-      .restore();      
+      .restore();
 
     yPos += 15;
 
     if (invoiceData.modalitaPagamento) {
-      doc.fontSize(10).font('Helvetica').fillColor('#555')
-        .text(`Modalità pagamento:`, startX1, yPos)
-        .text(`${invoiceData.modalitaPagamento}`, startX2, yPos);
-        yPos += 15;
-      
+      this.applyStyle(doc, 'subtitle');
+      doc.text(`Modalità pagamento:`, startX1, yPos);
+      doc.text(`${invoiceData.modalitaPagamento}`, startX2, yPos);
+      yPos += 15;
+
       if (invoiceData.scadenzaPagamento) {
-        doc.fontSize(10).font('Helvetica').fillColor('#555')
-          .text(`Scadenza:`, startX1, yPos)
-          .text(`${invoiceData.scadenzaPagamento}`, startX2, yPos);
-          yPos += 15;
+        doc.text(`Scadenza:`, startX1, yPos);
+        doc.text(`${invoiceData.scadenzaPagamento}`, startX2, yPos);
+        yPos += 15;
       }
+
       if (invoiceData.importoPagamento) {
-        doc.fontSize(10).font('Helvetica').fillColor('#555')
-          .text(`Importo da pagare:`, startX1, yPos)
-          .text(`${invoiceData.importoPagamento} €`, startX2, yPos);
-          yPos += 15;
+        doc.text(`Importo da pagare:`, startX1, yPos);
+        doc.text(`${invoiceData.importoPagamento} €`, startX2, yPos);
       }
     }
   }

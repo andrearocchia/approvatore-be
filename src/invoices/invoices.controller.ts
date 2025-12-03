@@ -24,7 +24,7 @@ export class InvoicesController {
     private readonly invoiceDbService: InvoiceDbService,
   ) {}
 
-  @Post('xml-to-pdf')
+  @Post('xmlApprove')
   @UseInterceptors(FileInterceptor('file'))
   async convertXmlToPdf(@UploadedFile() file: Express.Multer.File) {
     try {

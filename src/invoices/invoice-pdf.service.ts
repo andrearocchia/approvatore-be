@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { parseStringPromise } from 'xml2js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { PdfGeneratorService, InvoiceData } from './pdf-generator.service';
+import { PdfGeneratorService } from './pdf-generator.service';
 import { InvoiceDbService } from './invoice-db.service';
 
 export interface Invoice {
@@ -97,7 +97,11 @@ export class InvoicePdfService {
       explicitArray: true, 
       mergeAttrs: false, 
       normalize: true, 
-      trim: true 
+      trim: true,
+      tagNameProcessors: [],
+      attrNameProcessors: [],
+      valueProcessors: [],
+      attrValueProcessors: []
     });
     
     const invoiceData = this.extractInvoiceData(parsed);
@@ -108,11 +112,12 @@ export class InvoicePdfService {
   }
 
   /**
-   * Pulisce il contenuto XML da caratteri non validi
+   * Pulisce il contenuto XML da caratteri di controllo non validi
+   * preservando i caratteri UTF-8 validi
    */
   private cleanXmlContent(xmlContent: string): string {
     return xmlContent
-      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
       .replace(/&(?!(?:amp|lt|gt|quot|apos);)/g, '&amp;');
   }
 
@@ -121,7 +126,8 @@ export class InvoicePdfService {
    */
   private safeGet(obj: any, defaultValue = 'N/A'): string {
     if (!obj || (Array.isArray(obj) && obj.length === 0)) return defaultValue;
-    return Array.isArray(obj) ? obj[0] : obj;
+    const value = Array.isArray(obj) ? obj[0] : obj;
+    return value?.toString() || defaultValue;
   }
 
   /**
@@ -186,8 +192,8 @@ export class InvoicePdfService {
         comune: this.safeGet(cedenteSede?.Comune),
         provincia: this.safeGet(cedenteSede?.Provincia),
         nazione: this.safeGet(cedenteSede?.Nazione, undefined),
-        email: this.safeGet(cedenteContatti?.Email, ''),
-        telefono: this.safeGet(cedenteContatti?.Telefono, ''),
+        email: this.safeGet(cedenteContatti?.Email, undefined),
+        telefono: this.safeGet(cedenteContatti?.Telefono, undefined),
         iscrizioneREA: cedenteREA ? {
           ufficio: this.safeGet(cedenteREA.Ufficio, undefined),
           numeroREA: this.safeGet(cedenteREA.NumeroREA, undefined),
@@ -246,69 +252,16 @@ export class InvoicePdfService {
   }
 
   /**
-   * Converte i dati Invoice in formato InvoiceData per il PDF
-   */
-  private convertToInvoiceData(invoiceData: Omit<Invoice, 'id'>): InvoiceData {
-    return {
-      numero: invoiceData.numero,
-      data: invoiceData.data,
-      tipoDocumento: invoiceData.tipoDocumento,
-      art73: invoiceData.art73,
-      codiceDestinatario: invoiceData.codiceDestinatario,
-      cedente: {
-        nome: invoiceData.cedente.nome,
-        partitaIva: invoiceData.cedente.partitaIva,
-        codiceFiscale: invoiceData.cedente.codiceFiscale,
-        regimeFiscale: invoiceData.cedente.regimeFiscale,
-        indirizzo: invoiceData.cedente.indirizzo,
-        cap: invoiceData.cedente.cap,
-        comune: invoiceData.cedente.comune,
-        provincia: invoiceData.cedente.provincia,
-        email: invoiceData.cedente.email || '',
-        telefono: invoiceData.cedente.telefono || '',
-      },
-      cessionario: {
-        nome: invoiceData.cessionario.nome,
-        partitaIva: invoiceData.cessionario.partitaIva,
-        indirizzo: invoiceData.cessionario.indirizzo,
-        cap: invoiceData.cessionario.cap,
-        comune: invoiceData.cessionario.comune,
-        provincia: invoiceData.cessionario.provincia,
-      },
-      linee: invoiceData.linee.map(linea => ({
-        codiceArticolo: linea.codiceArticolo,
-        descrizione: linea.descrizione,
-        quantita: linea.quantita,
-        prezzoUnitario: linea.prezzoUnitario,
-        unitaMisura: linea.unitaMisura,
-        scontoMaggiorazione: linea.scontoMaggiorazione,
-        aliquotaIva: linea.aliquotaIva,
-        importo: linea.importo,
-      })),
-      totale: invoiceData.totale,
-      imponibile: invoiceData.imponibile,
-      imposta: invoiceData.imposta,
-      aliquota: invoiceData.aliquota,
-      modalitaPagamento: invoiceData.modalitaPagamento,
-      dettagliPagamento: invoiceData.dettagliPagamento,
-      scadenzaPagamento: invoiceData.scadenzaPagamento,
-      importoPagamento: invoiceData.importoPagamento,
-    };
-  }
-
-  /**
    * Genera il PDF della fattura
    */
   async generatePdf(invoiceData: Omit<Invoice, 'id'>, codiceUnico?: number): Promise<Buffer> {
-    const pdfData = this.convertToInvoiceData(invoiceData);
-    
     const outputDir = process.env.PDF_OUTPUT_DIR!;
     const fileName = codiceUnico 
       ? `fattura-${codiceUnico}-${Date.now()}.pdf`
       : `fattura-${Date.now()}.pdf`;
     const tempPath = join(outputDir, fileName);
     
-    await this.pdfGenerator.generatePDF(pdfData, tempPath);
+    await this.pdfGenerator.generatePDF(invoiceData, tempPath);
     
     // Piccolo delay per sincronizzazione filesystem
     await new Promise(resolve => setTimeout(resolve, 100));
