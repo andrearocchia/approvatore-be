@@ -60,7 +60,7 @@ Backend per la gestione del sistema di approvazione documentale con elaborazione
    npm run start:dev
    ```
 
-L'applicazione sarà disponibile su `http://localhost:3000`
+L'applicazione sarà disponibile su `http://localhost:80` o `http://localhost`
 
 ## Struttura del Progetto
 
@@ -154,8 +154,6 @@ Il sistema gestisce l'elaborazione delle fatture elettroniche in formato XML (Fa
 | POST | `/auth/login` | Login utente, restituisce JWT token |
 
 ### Fatture
-
-Tutti gli endpoint richiedono autenticazione JWT tramite header `Authorization: Bearer <token>`.
 
 | Metodo | Endpoint | Descrizione |
 |--------|----------|-------------|
@@ -352,16 +350,9 @@ app.use((req, res, next) => {
 });
 ```
 
-### CORS
-
-Il backend supporta CORS configurabile tramite variabile d'ambiente `CORS_URL`. Origini consentite di default:
-- `http://localhost:5173`
-- `http://localhost:3000`
-- Origine configurata in `.env`
-
 ## Integrazione ARCA
 
-Per l'integrazione con il sistema ARCA, consultare la documentazione dedicata: **[ARCA.md](./ARCA.md)**
+Per l'integrazione con il sistema ARCA, consultare la documentazione dedicata: **[ARCA.md](./../ARCA.md)**
 
 La documentazione ARCA include:
 - Dettagli autenticazione JWT
