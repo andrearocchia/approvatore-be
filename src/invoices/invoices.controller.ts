@@ -15,7 +15,7 @@ import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceDbService } from './invoice-db.service';
 import { StatoFattura } from '@prisma/client';
 import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 @Controller('invoices')
 export class InvoicesController {
@@ -108,14 +108,8 @@ export class InvoicesController {
   @Get(':codiceUnico/pdf')
   async getInvoicePdf(@Param('codiceUnico') codiceUnico: string) {
     try {
-      const pdfDir = process.env.PDF_OUTPUT_DIR;
-      if (!pdfDir) {
-        throw new HttpException(
-          { success: false, message: 'PDF_OUTPUT_DIR non configurata' },
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-
+      const pdfDir = resolve(process.cwd(), process.env.PDF_OUTPUT_DIR || './pdf');
+      
       const files = readdirSync(pdfDir);
       const pdfFile = files.find(f => 
         f.startsWith(`fattura-${codiceUnico}-`) && f.endsWith('.pdf')

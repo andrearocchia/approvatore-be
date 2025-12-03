@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { parseStringPromise } from 'xml2js';
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { PdfGeneratorService } from './pdf-generator.service';
 import { InvoiceDbService } from './invoice-db.service';
 
@@ -255,7 +255,7 @@ export class InvoicePdfService {
    * Genera il PDF della fattura
    */
   async generatePdf(invoiceData: Omit<Invoice, 'id'>, codiceUnico?: number): Promise<Buffer> {
-    const outputDir = process.env.PDF_OUTPUT_DIR!;
+    const outputDir = resolve(process.cwd(), process.env.PDF_OUTPUT_DIR || './pdf');
     const fileName = codiceUnico 
       ? `fattura-${codiceUnico}-${Date.now()}.pdf`
       : `fattura-${Date.now()}.pdf`;
