@@ -122,6 +122,31 @@ export class InvoicePdfService {
   }
 
   /**
+   * Formatta un numero nel formato italiano: 3.807,50
+   */
+  private formatNumber(value: string | number | undefined): string {
+    if (value === undefined || value === null || value === '') return 'N/A';
+    
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return 'N/A';
+    
+    return num.toLocaleString('it-IT', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
+  /**
+   * Aggiunge il simbolo della valuta se EUR
+   */
+  private addCurrencySymbol(value: string, divisa?: string): string {
+    if (divisa === 'EUR' && value !== 'N/A') {
+      return `${value} €`;
+    }
+    return value;
+  }
+
+  /**
    * Helper per estrarre valori in modo sicuro dall'XML parsato
    */
   private safeGet(obj: any, defaultValue = 'N/A'): string {
@@ -168,13 +193,15 @@ export class InvoicePdfService {
     const datiPagamento = body.DatiPagamento?.[0];
     const dettaglioPagamento = datiPagamento?.DettaglioPagamento?.[0];
 
+    const divisa = this.safeGet(datiGenerali?.Divisa, undefined);
+
     return {
       numero: this.safeGet(datiGenerali?.Numero),
       stato: this.safeGet(rootKey, 'in_attesa'),
       note: this.safeGet(rootKey, undefined),
       data: this.safeGet(datiGenerali?.Data),
       tipoDocumento: this.safeGet(datiGenerali?.TipoDocumento),
-      divisa: this.safeGet(datiGenerali?.Divisa, undefined),
+      divisa: divisa,
       art73: this.safeGet(datiGenerali?.Art73, 'NO'),
       causale: this.safeGet(datiGenerali?.Causale, undefined),
       
@@ -219,18 +246,18 @@ export class InvoicePdfService {
         numeroLinea: this.safeGet(linea.NumeroLinea, undefined),
         codiceArticolo: this.safeGet(linea.CodiceArticolo?.[0]?.CodiceValore, undefined),
         descrizione: this.safeGet(linea.Descrizione),
-        quantita: this.safeGet(linea.Quantita),
+        quantita: this.formatNumber(this.safeGet(linea.Quantita)),
         unitaMisura: this.safeGet(linea.UnitaMisura, undefined),
-        prezzoUnitario: this.safeGet(linea.PrezzoUnitario),
+        prezzoUnitario: this.addCurrencySymbol(this.formatNumber(this.safeGet(linea.PrezzoUnitario)), divisa),
         scontoMaggiorazione: this.safeGet(linea.ScontoMaggiorazione?.[0]?.Percentuale, undefined),
         aliquotaIva: this.safeGet(linea.AliquotaIVA, undefined),
-        importo: this.safeGet(linea.PrezzoTotale || linea.ImportoLinea),
+        importo: this.addCurrencySymbol(this.formatNumber(this.safeGet(linea.PrezzoTotale || linea.ImportoLinea)), divisa),
       })),
       
-      totale: this.safeGet(datiGenerali?.ImportoTotaleDocumento || riepilogo?.ImportoTotaleDocumento),
-      imponibile: this.safeGet(riepilogo?.ImponibileImporto),
-      imposta: this.safeGet(riepilogo?.Imposta),
-      aliquota: this.safeGet(riepilogo?.AliquotaIVA),
+      totale: this.addCurrencySymbol(this.formatNumber(this.safeGet(datiGenerali?.ImportoTotaleDocumento || riepilogo?.ImportoTotaleDocumento)), divisa),
+      imponibile: this.addCurrencySymbol(this.formatNumber(this.safeGet(riepilogo?.ImponibileImporto)), divisa),
+      imposta: this.addCurrencySymbol(this.formatNumber(this.safeGet(riepilogo?.Imposta)), divisa),
+      aliquota: this.formatNumber(this.safeGet(riepilogo?.AliquotaIVA)),
       esigibilitaIVA: this.safeGet(riepilogo?.EsigibilitaIVA, undefined),
       
       modalitaPagamento: this.safeGet(dettaglioPagamento?.ModalitaPagamento, undefined),
@@ -239,7 +266,7 @@ export class InvoicePdfService {
       dataRiferimentoTerminiPagamento: this.safeGet(dettaglioPagamento?.DataRiferimentoTerminiPagamento, undefined),
       giorniTerminiPagamento: this.safeGet(dettaglioPagamento?.GiorniTerminiPagamento, undefined),
       scadenzaPagamento: this.safeGet(dettaglioPagamento?.DataScadenzaPagamento, undefined),
-      importoPagamento: this.safeGet(dettaglioPagamento?.ImportoPagamento, undefined),
+      importoPagamento: this.addCurrencySymbol(this.formatNumber(this.safeGet(dettaglioPagamento?.ImportoPagamento, undefined)), divisa),
       
       terzoIntermediario: terzoIntermediario ? {
         denominazione: this.safeGet(terzoAnagrafica?.Anagrafica?.[0]?.Denominazione, undefined),

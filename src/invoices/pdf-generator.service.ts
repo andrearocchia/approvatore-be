@@ -194,23 +194,15 @@ export class PdfGeneratorService {
     invoiceData.linee.forEach((linea) => {
       doc.text(linea.codiceArticolo || '-', columns[0].x, currentY, { width: columns[0].width });
       doc.text(linea.descrizione, columns[1].x, currentY, { width: columns[1].width });
-      doc.text(this.formatNumber(linea.quantita), columns[2].x, currentY);
-      doc.text(this.formatNumber(linea.prezzoUnitario), columns[3].x, currentY);
+      doc.text(linea.quantita, columns[2].x, currentY);
+      doc.text(linea.prezzoUnitario, columns[3].x, currentY);
       doc.text(linea.unitaMisura || '-', columns[4].x, currentY);
-      doc.text(linea.scontoMaggiorazione ? this.formatNumber(linea.scontoMaggiorazione) : '-', columns[5].x, currentY);
-      doc.text(linea.aliquotaIva ? this.formatNumber(linea.aliquotaIva) : '-', columns[6].x, currentY);
-      doc.text(this.formatNumber(linea.importo), columns[7].x, currentY);
+      doc.text(linea.scontoMaggiorazione || '-', columns[5].x, currentY);
+      doc.text(linea.aliquotaIva || '-', columns[6].x, currentY);
+      doc.text(linea.importo, columns[7].x, currentY);
 
       currentY += this.STYLES.rowHeight;
     });
-  }
-
-  /**
-   * Format numeri
-   */
-  private formatNumber(value: string | number): string {
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    return isNaN(num) ? '-' : num.toFixed(2);
   }
 
   /**
@@ -236,11 +228,11 @@ export class PdfGeneratorService {
 
     this.applyStyle(doc, 'subtitle');
     doc.text(`Totale Imponibile:`, startX1, yPos);
-    doc.text(`${invoiceData.imponibile} €`, startX2, yPos);
+    doc.text(`${invoiceData.imponibile}`, startX2, yPos);
     yPos += 15;
 
     doc.text(`IVA (${invoiceData.aliquota ?? '-'}%):`, startX1, yPos);
-    doc.text(`${invoiceData.imposta} €`, startX2, yPos);
+    doc.text(`${invoiceData.imposta}`, startX2, yPos);
     yPos += 20;
 
     doc.save()
@@ -255,7 +247,7 @@ export class PdfGeneratorService {
 
     this.applyStyle(doc, 'sectionTitle');
     doc.text(`TOTALE:`, startX1, yPos);
-    doc.text(`${invoiceData.totale} €`, startX2, yPos);
+    doc.text(`${invoiceData.totale}`, startX2, yPos);
 
     yPos += 30;
 
@@ -283,7 +275,7 @@ export class PdfGeneratorService {
 
       if (invoiceData.importoPagamento) {
         doc.text(`Importo da pagare:`, startX1, yPos);
-        doc.text(`${invoiceData.importoPagamento} €`, startX2, yPos);
+        doc.text(`${invoiceData.importoPagamento}`, startX2, yPos);
       }
     }
   }
