@@ -41,7 +41,6 @@ Backend per la gestione del sistema di approvazione documentale con elaborazione
    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/invoicesdb?schema=public"
    JWT_SECRET="your-secret-key"
    JWT_EXPIRES_IN="3600"
-   CORS_URL="http://localhost:5173"
    PDF_OUTPUT_DIR="/path/to/pdf/output"
    ```
 
