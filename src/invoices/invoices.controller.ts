@@ -100,6 +100,20 @@ export class InvoicesController {
     }
   }
 
+  @Get('processed')
+  async getProcessedInvoices() {
+    try {
+      const invoices = await this.invoiceDbService.getProcessedInvoices();
+      return { success: true, invoices };
+    } catch (error) {
+      console.error('Errore recupero fatture elaborate:', error.message);
+      throw new HttpException(
+        { success: false, message: error.message },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get(':codiceUnico')
   async getInvoiceStatusAndNote(@Param('codiceUnico') codiceUnico: string) {
     try {

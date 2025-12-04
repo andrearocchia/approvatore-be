@@ -113,6 +113,19 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
+  async getProcessedInvoices() {
+    const invoices = await prisma.invoice.findMany({
+      where: { 
+        stato: { 
+          in: ['approvato', 'rifiutato'] 
+        } 
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    
+    return invoices.map(inv => this.mapToInvoice(inv));
+  }
+
   private mapToInvoice(dbInvoice: any): Invoice {
     return {
       id: dbInvoice.codiceUnico.toString(),
