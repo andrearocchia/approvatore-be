@@ -156,28 +156,32 @@ export class PdfGeneratorService {
     this.applyStyle(doc, "table");
 
     const columns = [
-      { key: "codiceArticolo", label: "Codice", x: 40, width: 55 },
-      { key: "descrizione", label: "Descrizione", x: 100, width: 215 },
-      { key: "quantita", label: "Q.tà", x: 320, width: 40 },
-      { key: "prezzoUnitario", label: "Prezzo", x: 365, width: 60 },
-      { key: "unitaMisura", label: "UM", x: 430, width: 28 },
-      { key: "scontoMaggiorazione", label: "Sconto", x: 463, width: 28 },
-      { key: "aliquotaIva", label: "%IVA", x: 494, width: 26 },
-      { key: "importo", label: "Totale", x: 525, width: 45 },
+      { key: "codiceArticolo", label: "Codice", x: 40, width: 55, padding: 3 },
+      { key: "descrizione", label: "Descrizione", x: 100, width: 230, padding: 3 },
+      { key: "quantita", label: "Q.tà", x: 335, width: 35, padding: 3 },
+      { key: "prezzoUnitario", label: "Prezzo", x: 375, width: 45, padding: 3 },
+      { key: "unitaMisura", label: "UM", x: 425, width: 20, padding: 3 },
+      { key: "scontoMaggiorazione", label: "Sconto", x: 450, width: 35, padding: 3 },
+      { key: "aliquotaIva", label: "%IVA", x: 485, width: 25, padding: 3 },
+      { key: "importo", label: "Totale", x: 515, width: 50, padding: 3 },
     ];
+
+    const headerPaddingTop = 3;
+    const headerPaddingBottom = 2;
 
     // HEADER
     this.applyStyle(doc, "tableHeader");
     let y = doc.y;
 
+    // Linea superiore header
     doc.moveTo(startX, y).lineTo(endX, y).stroke();
-    y += 4;
+    y += headerPaddingTop; // padding-top
 
     columns.forEach(col =>
-      doc.text(col.label, col.x, y, { width: col.width })
+      doc.text(col.label, col.x + (col.padding || 0), y, { width: col.width - (col.padding || 0), align: "left" })
     );
 
-    y += baseRowHeight;
+    y += baseRowHeight - headerPaddingTop - headerPaddingBottom; // padding-bottom
     doc.moveTo(startX, y).lineTo(endX, y).stroke();
 
     this.applyStyle(doc, "table");
@@ -186,25 +190,15 @@ export class PdfGeneratorService {
     invoiceData.linee.forEach((line) => {
       const cleanDesc = (line.descrizione || "").replace(/\|/g, " ");
 
-      // Calcolo altezza descrizione
-      const dHeight = doc.heightOfString(cleanDesc, {
-        width: 200,
-        align: "left",
-      });
-
-      // Altezza riga = max tra min-base + altezza testo
+      const dHeight = doc.heightOfString(cleanDesc, { width: 200, align: "left" });
       let rowHeight = Math.max(baseRowHeight, dHeight + 6);
-
-      // Hard limit per sicurezza
       if (rowHeight > 40) rowHeight = 40;
 
-      // Page break intelligente
       const bottomPage = doc.page.height - doc.page.margins.bottom - 40;
       if (y + rowHeight > bottomPage) {
         doc.addPage();
         y = doc.y;
 
-        // ridisegno header breve
         this.applyStyle(doc, "tableHeader");
         doc.moveTo(startX, y).lineTo(endX, y).stroke();
         y += 4;
@@ -219,28 +213,25 @@ export class PdfGeneratorService {
       const textY = y + 5;
 
       columns.forEach((col) => {
-        const value =
-          col.key === "descrizione"
-            ? cleanDesc
-            : (line[col.key] || "-");
-
-        doc.text(value, col.x, textY, {
-          width: col.width,
-          align: "left",
-        });
+        const value = col.key === "descrizione" ? cleanDesc : (line[col.key] || "-");
+        doc.text(value, col.x + (col.padding || 0), textY, { width: col.width - (col.padding || 0), align: "left" });
       });
 
-      // linea inferiore della riga
+      // LINEE VERTICALI per ogni colonna
+      columns.forEach(col => {
+        doc.moveTo(col.x, y)
+          .lineTo(col.x, y + rowHeight)
+          .lineWidth(0.5)
+          .strokeColor("#aaa")
+          .stroke();
+      });
+
+      // linea finale orizzontale della riga
       y += rowHeight;
-      doc
-        .moveTo(startX, y)
-        .lineTo(endX, y)
-        .lineWidth(0.5)
-        .strokeColor("#aaa")
-        .stroke();
+      doc.moveTo(startX, y).lineTo(endX, y).lineWidth(0.5).strokeColor("#aaa").stroke();
     });
 
-    doc.y = y + 20;
+    doc.y = y + 10;
   }
 
   private drawTotals(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
