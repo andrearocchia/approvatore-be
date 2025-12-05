@@ -4,88 +4,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { PdfGeneratorService } from './pdf-generator.service';
 import { InvoiceDbService } from './invoice-db.service';
-
-export interface DettaglioPagamento {
-  modalitaPagamento: string;
-  modalitaPagamentoDescrizione?: string;
-  dataRiferimentoTerminiPagamento?: string;
-  giorniTerminiPagamento?: string;
-  dataScadenzaPagamento?: string;
-  importoPagamento?: string;
-  beneficiario?: string;
-  iban?: string;
-  bic?: string;
-}
-
-export interface Invoice {
-  id: string;
-  stato: string;
-  note: string;
-  numero: string;
-  data: string;
-  tipoDocumento: string;
-  divisa?: string;
-  art73: string;
-  causale?: string;
-  codiceDestinatario: string;
-  pecDestinatario?: string;
-  cedente: {
-    nome: string;
-    partitaIva: string;
-    codiceFiscale?: string;
-    regimeFiscale?: string;
-    indirizzo: string;
-    numeroCivico?: string;
-    cap: string;
-    comune: string;
-    provincia: string;
-    nazione?: string;
-    email?: string;
-    telefono?: string;
-    iscrizioneREA?: {
-      ufficio?: string;
-      numeroREA?: string;
-      capitaleSociale?: string;
-      socioUnico?: string;
-      statoLiquidazione?: string;
-    };
-  };
-  cessionario: {
-    nome: string;
-    partitaIva: string;
-    codiceFiscale?: string;
-    indirizzo: string;
-    numeroCivico?: string;
-    cap: string;
-    comune: string;
-    provincia: string;
-    nazione?: string;
-  };
-  linee: {
-    numeroLinea?: string;
-    codiceArticolo?: string;
-    descrizione: string;
-    quantita: string;
-    unitaMisura?: string;
-    prezzoUnitario: string;
-    scontoMaggiorazione?: string;
-    aliquotaIva?: string;
-    importo: string;
-  }[];
-  totale: string;
-  imponibile: string;
-  imposta: string;
-  aliquota: string;
-  esigibilitaIVA?: string;
-  condizioniPagamento?: string;
-  dettagliPagamento: DettaglioPagamento[];
-  terzoIntermediario?: {
-    denominazione?: string;
-    partitaIva?: string;
-    codiceFiscale?: string;
-  };
-  soggettoEmittente?: string;
-}
+import { Invoice } from './invoice.interface';
 
 @Injectable()
 export class InvoicePdfService {
@@ -94,7 +13,6 @@ export class InvoicePdfService {
     private readonly invoiceDb: InvoiceDbService,
   ) {}
 
-  // Mappa codici modalità pagamento
   private readonly MODALITA_PAGAMENTO_MAP: Record<string, string> = {
     'MP01': 'Contanti',
     'MP02': 'Assegno',
@@ -196,8 +114,7 @@ export class InvoicePdfService {
 
     const divisa = this.safeGet(datiGenerali?.Divisa, undefined);
 
-    // Parsing di tutti i DettaglioPagamento
-    const dettagliPagamento: DettaglioPagamento[] = dettaglioPagamentoArray.map((dp: any) => {
+    const dettagliPagamento = dettaglioPagamentoArray.map((dp: any) => {
       const modalitaCodice = this.safeGet(dp.ModalitaPagamento, undefined);
       return {
         modalitaPagamento: modalitaCodice,
@@ -214,8 +131,8 @@ export class InvoicePdfService {
 
     return {
       numero: this.safeGet(datiGenerali?.Numero),
-      stato: this.safeGet(rootKey, 'in_attesa'),
-      note: this.safeGet(rootKey, undefined),
+      stato: 'in_attesa',
+      note: '',
       data: this.safeGet(datiGenerali?.Data),
       tipoDocumento: this.safeGet(datiGenerali?.TipoDocumento),
       divisa: divisa,

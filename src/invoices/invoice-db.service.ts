@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, StatoFattura } from '@prisma/client';
-import { Invoice } from './invoice-pdf.service';
+import { Invoice } from './invoice.interface';
 
 const prisma = new PrismaClient();
 
@@ -9,8 +9,8 @@ export class InvoiceDbService {
   async saveInvoice(invoiceData: Omit<Invoice, 'id'>): Promise<number> {
     const invoice = await prisma.invoice.create({
       data: {
-        stato: 'in_attesa',
-        note: '',
+        stato: invoiceData.stato as StatoFattura,
+        note: invoiceData.note,
         
         numero: invoiceData.numero,
         data: invoiceData.data,
@@ -81,7 +81,7 @@ export class InvoiceDbService {
     });
   }
 
-  async getInvoiceById(codiceUnico: number) {
+  async getInvoiceById(codiceUnico: number): Promise<Invoice | null> {
     const invoice = await prisma.invoice.findUnique({
       where: { codiceUnico },
     });
@@ -91,7 +91,7 @@ export class InvoiceDbService {
     return this.mapToInvoice(invoice);
   }
 
-  async getAllInvoices() {
+  async getAllInvoices(): Promise<Invoice[]> {
     const invoices = await prisma.invoice.findMany({
       orderBy: { createdAt: 'desc' },
     });
@@ -99,7 +99,7 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
-  async getStandByInvoices() {
+  async getStandByInvoices(): Promise<Invoice[]> {
     const invoices = await prisma.invoice.findMany({
       where: { stato: 'in_attesa' },
       orderBy: { createdAt: 'desc' },
@@ -108,7 +108,7 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
-  async getProcessedInvoices() {
+  async getProcessedInvoices(): Promise<Invoice[]> {
     const invoices = await prisma.invoice.findMany({
       where: { 
         stato: { 
@@ -121,7 +121,6 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
-  // Helper per il parsing sicuro del JSON
   private safeJsonParse(jsonString: string, fallback: any = []): any {
     try {
       if (!jsonString) return fallback;
