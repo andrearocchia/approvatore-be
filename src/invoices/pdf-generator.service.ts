@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createWriteStream } from 'fs';
-import { Invoice } from './invoice-pdf.service';
+import { Invoice } from './invoice.interface';
 
 const PDFDocument = require('pdfkit');
 
@@ -12,9 +12,9 @@ export class PdfGeneratorService {
     subtitle: { size: 10, font: 'Helvetica', color: '#555' },
     sectionTitle: { size: 10, font: 'Helvetica-Bold', color: '#333' },
     body: { size: 8, font: 'Helvetica', color: '#555' },
-    table: { size: 9, font: 'Helvetica', color: '#555' },
-    tableHeader: { size: 9, font: 'Helvetica-Bold', color: '#333' },
-    rowHeight: 20,
+    table: { size: 7, font: 'Helvetica', color: '#555' },
+    tableHeader: { size: 7, font: 'Helvetica-Bold', color: '#333' },
+    rowHeight: 14,
     margins: { page: 40, section: 20 }
   };
 
@@ -142,54 +142,105 @@ export class PdfGeneratorService {
     doc.text(`Comune:`, 50, yPos);
     doc.text(`${invoiceData.cessionario.comune}`, 150, yPos);
 
-    doc.y = yPos + 20;
-
-    doc.save()
-      .moveTo(40, doc.y)
-      .lineTo(555, doc.y)
-      .lineWidth(1)
-      .strokeColor('#000000')
-      .stroke()
-      .restore();
-
-    doc.moveDown(1);
+    doc.moveDown(2);
   }
 
   private drawItemsTable(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
-    const startY = doc.y;
+    const startX = 40;
+    const endX = 560;
+
+    // Altezza minima riga
+    const baseRowHeight = 16;
+
+    // Font tabella
+    this.applyStyle(doc, "table");
 
     const columns = [
-      { label: 'Codice', x: 50, width: 50 },
-      { label: 'Descrizione', x: 100, width: 200 },
-      { label: 'Q.tà', x: 300, width: 35 },
-      { label: 'Prezzo', x: 335, width: 50 },
-      { label: 'UM', x: 385, width: 25 },
-      { label: 'Sconto', x: 410, width: 45 },
-      { label: '%IVA', x: 455, width: 30 },
-      { label: 'Totale', x: 485, width: 65 }
+      { key: "codiceArticolo", label: "Codice", x: 40, width: 55 },
+      { key: "descrizione", label: "Descrizione", x: 100, width: 215 },
+      { key: "quantita", label: "Q.tà", x: 320, width: 40 },
+      { key: "prezzoUnitario", label: "Prezzo", x: 365, width: 60 },
+      { key: "unitaMisura", label: "UM", x: 430, width: 28 },
+      { key: "scontoMaggiorazione", label: "Sconto", x: 463, width: 28 },
+      { key: "aliquotaIva", label: "%IVA", x: 494, width: 26 },
+      { key: "importo", label: "Totale", x: 525, width: 45 },
     ];
 
-    this.applyStyle(doc, 'tableHeader');
-    columns.forEach(col => {
-      doc.text(col.label, col.x, startY);
+    // HEADER
+    this.applyStyle(doc, "tableHeader");
+    let y = doc.y;
+
+    doc.moveTo(startX, y).lineTo(endX, y).stroke();
+    y += 4;
+
+    columns.forEach(col =>
+      doc.text(col.label, col.x, y, { width: col.width })
+    );
+
+    y += baseRowHeight;
+    doc.moveTo(startX, y).lineTo(endX, y).stroke();
+
+    this.applyStyle(doc, "table");
+
+    // ROWS
+    invoiceData.linee.forEach((line) => {
+      const cleanDesc = (line.descrizione || "").replace(/\|/g, " ");
+
+      // Calcolo altezza descrizione
+      const dHeight = doc.heightOfString(cleanDesc, {
+        width: 200,
+        align: "left",
+      });
+
+      // Altezza riga = max tra min-base + altezza testo
+      let rowHeight = Math.max(baseRowHeight, dHeight + 6);
+
+      // Hard limit per sicurezza
+      if (rowHeight > 40) rowHeight = 40;
+
+      // Page break intelligente
+      const bottomPage = doc.page.height - doc.page.margins.bottom - 40;
+      if (y + rowHeight > bottomPage) {
+        doc.addPage();
+        y = doc.y;
+
+        // ridisegno header breve
+        this.applyStyle(doc, "tableHeader");
+        doc.moveTo(startX, y).lineTo(endX, y).stroke();
+        y += 4;
+        columns.forEach(col =>
+          doc.text(col.label, col.x, y, { width: col.width })
+        );
+        y += baseRowHeight;
+        doc.moveTo(startX, y).lineTo(endX, y).stroke();
+        this.applyStyle(doc, "table");
+      }
+
+      const textY = y + 5;
+
+      columns.forEach((col) => {
+        const value =
+          col.key === "descrizione"
+            ? cleanDesc
+            : (line[col.key] || "-");
+
+        doc.text(value, col.x, textY, {
+          width: col.width,
+          align: "left",
+        });
+      });
+
+      // linea inferiore della riga
+      y += rowHeight;
+      doc
+        .moveTo(startX, y)
+        .lineTo(endX, y)
+        .lineWidth(0.5)
+        .strokeColor("#aaa")
+        .stroke();
     });
 
-    let currentY = startY + this.STYLES.rowHeight;
-
-    this.applyStyle(doc, 'table');
-
-    invoiceData.linee.forEach((linea) => {
-      doc.text(linea.codiceArticolo || '-', columns[0].x, currentY, { width: columns[0].width });
-      doc.text(linea.descrizione, columns[1].x, currentY, { width: columns[1].width });
-      doc.text(linea.quantita, columns[2].x, currentY);
-      doc.text(linea.prezzoUnitario, columns[3].x, currentY);
-      doc.text(linea.unitaMisura || '-', columns[4].x, currentY);
-      doc.text(linea.scontoMaggiorazione || '-', columns[5].x, currentY);
-      doc.text(linea.aliquotaIva || '-', columns[6].x, currentY);
-      doc.text(linea.importo, columns[7].x, currentY);
-
-      currentY += this.STYLES.rowHeight;
-    });
+    doc.y = y + 20;
   }
 
   private drawTotals(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
