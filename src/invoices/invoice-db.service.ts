@@ -55,13 +55,8 @@ export class InvoiceDbService {
         aliquota: invoiceData.aliquota,
         esigibilitaIVA: invoiceData.esigibilitaIVA,
         
-        modalitaPagamento: invoiceData.modalitaPagamento,
         condizioniPagamento: invoiceData.condizioniPagamento,
-        dettagliPagamento: invoiceData.dettagliPagamento,
-        dataRiferimentoTerminiPagamento: invoiceData.dataRiferimentoTerminiPagamento,
-        giorniTerminiPagamento: invoiceData.giorniTerminiPagamento,
-        scadenzaPagamento: invoiceData.scadenzaPagamento,
-        importoPagamento: invoiceData.importoPagamento,
+        dettagliPagamento: JSON.stringify(invoiceData.dettagliPagamento),
         
         terzoIntermediarioDenominazione: invoiceData.terzoIntermediario?.denominazione,
         terzoIntermediarioPartitaIva: invoiceData.terzoIntermediario?.partitaIva,
@@ -126,6 +121,17 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
+  // Helper per il parsing sicuro del JSON
+  private safeJsonParse(jsonString: string, fallback: any = []): any {
+    try {
+      if (!jsonString) return fallback;
+      return JSON.parse(jsonString);
+    } catch (error) {
+      console.warn(`[InvoiceDbService] Errore parsing JSON: "${jsonString}". Uso fallback.`, error);
+      return fallback;
+    }
+  }
+
   private mapToInvoice(dbInvoice: any): Invoice {
     return {
       id: dbInvoice.codiceUnico.toString(),
@@ -174,7 +180,7 @@ export class InvoiceDbService {
         nazione: dbInvoice.cessionarioNazione,
       },
 
-      linee: JSON.parse(dbInvoice.linee),
+      linee: this.safeJsonParse(dbInvoice.linee),
 
       totale: dbInvoice.totale,
       imponibile: dbInvoice.imponibile,
@@ -182,13 +188,8 @@ export class InvoiceDbService {
       aliquota: dbInvoice.aliquota,
       esigibilitaIVA: dbInvoice.esigibilitaIVA,
 
-      modalitaPagamento: dbInvoice.modalitaPagamento,
       condizioniPagamento: dbInvoice.condizioniPagamento,
-      dettagliPagamento: dbInvoice.dettagliPagamento,
-      dataRiferimentoTerminiPagamento: dbInvoice.dataRiferimentoTerminiPagamento,
-      giorniTerminiPagamento: dbInvoice.giorniTerminiPagamento,
-      scadenzaPagamento: dbInvoice.scadenzaPagamento,
-      importoPagamento: dbInvoice.importoPagamento,
+      dettagliPagamento: this.safeJsonParse(dbInvoice.dettagliPagamento),
 
       terzoIntermediario: dbInvoice.terzoIntermediarioDenominazione ? {
         denominazione: dbInvoice.terzoIntermediarioDenominazione,

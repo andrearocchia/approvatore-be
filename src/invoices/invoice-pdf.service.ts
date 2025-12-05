@@ -5,10 +5,22 @@ import { join, resolve } from 'path';
 import { PdfGeneratorService } from './pdf-generator.service';
 import { InvoiceDbService } from './invoice-db.service';
 
+export interface DettaglioPagamento {
+  modalitaPagamento: string;
+  modalitaPagamentoDescrizione?: string;
+  dataRiferimentoTerminiPagamento?: string;
+  giorniTerminiPagamento?: string;
+  dataScadenzaPagamento?: string;
+  importoPagamento?: string;
+  beneficiario?: string;
+  iban?: string;
+  bic?: string;
+}
+
 export interface Invoice {
   id: string;
   stato: string;
-  note: string,
+  note: string;
   numero: string;
   data: string;
   tipoDocumento: string;
@@ -65,13 +77,8 @@ export interface Invoice {
   imposta: string;
   aliquota: string;
   esigibilitaIVA?: string;
-  modalitaPagamento?: string;
   condizioniPagamento?: string;
-  dettagliPagamento?: string;
-  dataRiferimentoTerminiPagamento?: string;
-  giorniTerminiPagamento?: string;
-  scadenzaPagamento?: string;
-  importoPagamento?: string;
+  dettagliPagamento: DettaglioPagamento[];
   terzoIntermediario?: {
     denominazione?: string;
     partitaIva?: string;
@@ -87,10 +94,20 @@ export class InvoicePdfService {
     private readonly invoiceDb: InvoiceDbService,
   ) {}
 
-  /**
-   * Metodo principale: elabora XML, salva in DB e genera PDF
-   * Restituisce il codiceUnico della fattura
-   */
+  // Mappa codici modalità pagamento
+  private readonly MODALITA_PAGAMENTO_MAP: Record<string, string> = {
+    'MP01': 'Contanti',
+    'MP02': 'Assegno',
+    'MP05': 'Bonifico',
+    'MP08': 'Carta di pagamento',
+    'MP12': 'RID/Addebito diretto',
+    'MP22': 'PagoPA',
+  };
+
+  private getModalitaPagamentoDescrizione(codice: string): string {
+    return this.MODALITA_PAGAMENTO_MAP[codice] || codice;
+  }
+
   async processXmlAndGeneratePdf(xmlContent: string): Promise<number> {
     const cleanXml = this.cleanXmlContent(xmlContent);
     const parsed = await parseStringPromise(cleanXml, { 
@@ -111,19 +128,12 @@ export class InvoicePdfService {
     return codiceUnico;
   }
 
-  /**
-   * Pulisce il contenuto XML da caratteri di controllo non validi
-   * preservando i caratteri UTF-8 validi
-   */
   private cleanXmlContent(xmlContent: string): string {
     return xmlContent
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
       .replace(/&(?!(?:amp|lt|gt|quot|apos);)/g, '&amp;');
   }
 
-  /**
-   * Formatta un numero nel formato italiano: 3.807,50
-   */
   private formatNumber(value: string | number | undefined): string {
     if (value === undefined || value === null || value === '') return 'N/A';
     
@@ -136,9 +146,6 @@ export class InvoicePdfService {
     });
   }
 
-  /**
-   * Aggiunge il simbolo della valuta se EUR
-   */
   private addCurrencySymbol(value: string, divisa?: string): string {
     if (divisa === 'EUR' && value !== 'N/A') {
       return `${value} €`;
@@ -146,18 +153,12 @@ export class InvoicePdfService {
     return value;
   }
 
-  /**
-   * Helper per estrarre valori in modo sicuro dall'XML parsato
-   */
   private safeGet(obj: any, defaultValue = 'N/A'): string {
     if (!obj || (Array.isArray(obj) && obj.length === 0)) return defaultValue;
     const value = Array.isArray(obj) ? obj[0] : obj;
     return value?.toString() || defaultValue;
   }
 
-  /**
-   * Estrae i dati strutturati della fattura dall'XML parsato
-   */
   extractInvoiceData(parsedXML: any): Omit<Invoice, 'id'> {
     const rootKey = Object.keys(parsedXML).find(k => k.includes('FatturaElettronica'));
     if (!rootKey) throw new Error('Root FatturaElettronica non trovata');
@@ -191,9 +192,25 @@ export class InvoicePdfService {
     const riepilogo = datiBeniServizi?.DatiRiepilogo?.[0];
     
     const datiPagamento = body.DatiPagamento?.[0];
-    const dettaglioPagamento = datiPagamento?.DettaglioPagamento?.[0];
+    const dettaglioPagamentoArray = datiPagamento?.DettaglioPagamento || [];
 
     const divisa = this.safeGet(datiGenerali?.Divisa, undefined);
+
+    // Parsing di tutti i DettaglioPagamento
+    const dettagliPagamento: DettaglioPagamento[] = dettaglioPagamentoArray.map((dp: any) => {
+      const modalitaCodice = this.safeGet(dp.ModalitaPagamento, undefined);
+      return {
+        modalitaPagamento: modalitaCodice,
+        modalitaPagamentoDescrizione: modalitaCodice ? this.getModalitaPagamentoDescrizione(modalitaCodice) : undefined,
+        dataRiferimentoTerminiPagamento: this.safeGet(dp.DataRiferimentoTerminiPagamento, undefined),
+        giorniTerminiPagamento: this.safeGet(dp.GiorniTerminiPagamento, undefined),
+        dataScadenzaPagamento: this.safeGet(dp.DataScadenzaPagamento, undefined),
+        importoPagamento: this.addCurrencySymbol(this.formatNumber(this.safeGet(dp.ImportoPagamento, undefined)), divisa),
+        beneficiario: this.safeGet(dp.Beneficiario, undefined),
+        iban: this.safeGet(dp.IBAN, undefined),
+        bic: this.safeGet(dp.BIC, undefined),
+      };
+    });
 
     return {
       numero: this.safeGet(datiGenerali?.Numero),
@@ -242,7 +259,7 @@ export class InvoicePdfService {
         nazione: this.safeGet(cessionarioSede?.Nazione, undefined),
       },
       
-      linee: linee.map(linea => ({
+      linee: linee.map((linea: any) => ({
         numeroLinea: this.safeGet(linea.NumeroLinea, undefined),
         codiceArticolo: this.safeGet(linea.CodiceArticolo?.[0]?.CodiceValore, undefined),
         descrizione: this.safeGet(linea.Descrizione),
@@ -260,13 +277,8 @@ export class InvoicePdfService {
       aliquota: this.formatNumber(this.safeGet(riepilogo?.AliquotaIVA)),
       esigibilitaIVA: this.safeGet(riepilogo?.EsigibilitaIVA, undefined),
       
-      modalitaPagamento: this.safeGet(dettaglioPagamento?.ModalitaPagamento, undefined),
       condizioniPagamento: this.safeGet(datiPagamento?.CondizioniPagamento, undefined),
-      dettagliPagamento: this.safeGet(dettaglioPagamento?.Beneficiario, undefined),
-      dataRiferimentoTerminiPagamento: this.safeGet(dettaglioPagamento?.DataRiferimentoTerminiPagamento, undefined),
-      giorniTerminiPagamento: this.safeGet(dettaglioPagamento?.GiorniTerminiPagamento, undefined),
-      scadenzaPagamento: this.safeGet(dettaglioPagamento?.DataScadenzaPagamento, undefined),
-      importoPagamento: this.addCurrencySymbol(this.formatNumber(this.safeGet(dettaglioPagamento?.ImportoPagamento, undefined)), divisa),
+      dettagliPagamento,
       
       terzoIntermediario: terzoIntermediario ? {
         denominazione: this.safeGet(terzoAnagrafica?.Anagrafica?.[0]?.Denominazione, undefined),
@@ -278,9 +290,6 @@ export class InvoicePdfService {
     };
   }
 
-  /**
-   * Genera il PDF della fattura
-   */
   async generatePdf(invoiceData: Omit<Invoice, 'id'>, codiceUnico?: number): Promise<Buffer> {
     const outputDir = resolve(process.cwd(), process.env.PDF_OUTPUT_DIR || './pdf');
     const fileName = codiceUnico 
@@ -290,7 +299,6 @@ export class InvoicePdfService {
     
     await this.pdfGenerator.generatePDF(invoiceData, tempPath);
     
-    // Piccolo delay per sincronizzazione filesystem
     await new Promise(resolve => setTimeout(resolve, 100));
     
     const buffer = readFileSync(tempPath);

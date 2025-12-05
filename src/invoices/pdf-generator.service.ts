@@ -7,7 +7,6 @@ const PDFDocument = require('pdfkit');
 @Injectable()
 export class PdfGeneratorService {
 
-  // STYLES CENTRALIZZATI
   private readonly STYLES = {
     title: { size: 20, font: 'Helvetica-Bold', color: '#333' },
     subtitle: { size: 10, font: 'Helvetica', color: '#555' },
@@ -19,16 +18,12 @@ export class PdfGeneratorService {
     margins: { page: 40, section: 20 }
   };
 
-  // Helper per applicare gli stili
   private applyStyle(doc: any, styleKey: keyof PdfGeneratorService['STYLES']) {
     const s = this.STYLES[styleKey] as any;
-    if (!s.size) return; // evita errori sui valori numerici come rowHeight
+    if (!s.size) return;
     doc.fontSize(s.size).font(s.font).fillColor(s.color);
   }
 
-  /**
-   * Genera un PDF a partire dai dati della fattura
-   */
   public generatePDF(invoiceData: Omit<Invoice, 'id'>, outputPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
@@ -40,6 +35,7 @@ export class PdfGeneratorService {
         this.drawPartiesSection(doc, invoiceData);
         this.drawItemsTable(doc, invoiceData);
         this.drawTotals(doc, invoiceData);
+        this.drawPaymentDetails(doc, invoiceData);
 
         doc.end();
         stream.on('finish', () => resolve());
@@ -51,9 +47,6 @@ export class PdfGeneratorService {
     });
   }
 
-  /**
-   * CONTAINER 1: INTESTAZIONE
-   */
   private drawTitle(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
     const startY = doc.y;
 
@@ -76,9 +69,6 @@ export class PdfGeneratorService {
     doc.moveDown(1);
   }
 
-  /**
-   * CONTAINER 2: CEDENTE/PRESTATORE e CESSIONARIO/COMMITTENTE
-   */
   private drawPartiesSection(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
     const startY = doc.y;
 
@@ -165,9 +155,6 @@ export class PdfGeneratorService {
     doc.moveDown(1);
   }
 
-  /**
-   * CONTAINER 3: TABELLA ARTICOLI
-   */
   private drawItemsTable(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
     const startY = doc.y;
 
@@ -205,9 +192,6 @@ export class PdfGeneratorService {
     });
   }
 
-  /**
-   * TOTALI
-   */
   private drawTotals(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
     const startY = doc.y + 30;
     const startX1 = 400;
@@ -249,34 +233,81 @@ export class PdfGeneratorService {
     doc.text(`TOTALE:`, startX1, yPos);
     doc.text(`${invoiceData.totale}`, startX2, yPos);
 
-    yPos += 30;
+    doc.y = yPos + 30;
+  }
+
+  private drawPaymentDetails(doc: any, invoiceData: Omit<Invoice, 'id'>): void {
+    if (!invoiceData.dettagliPagamento || invoiceData.dettagliPagamento.length === 0) {
+      return;
+    }
+
+    const startY = doc.y;
+    const startX1 = 50;
+    const startX2 = 200;
 
     doc.save()
-      .moveTo(startX1, yPos)
-      .lineTo(startX2 + 55, yPos)
+      .moveTo(startX1, startY)
+      .lineTo(555, startY)
       .lineWidth(1)
       .strokeColor('#000000')
       .stroke()
       .restore();
 
-    yPos += 15;
+    let yPos = startY + 15;
 
-    if (invoiceData.modalitaPagamento) {
-      this.applyStyle(doc, 'subtitle');
-      doc.text(`Modalità pagamento:`, startX1, yPos);
-      doc.text(`${invoiceData.modalitaPagamento}`, startX2, yPos);
+    this.applyStyle(doc, 'sectionTitle');
+    doc.text('DETTAGLI PAGAMENTO', startX1, yPos);
+    yPos += 20;
+
+    if (invoiceData.condizioniPagamento) {
+      this.applyStyle(doc, 'body');
+      doc.text(`Condizioni:`, startX1, yPos);
+      doc.text(`${invoiceData.condizioniPagamento}`, startX2, yPos);
       yPos += 15;
+    }
 
-      if (invoiceData.scadenzaPagamento) {
-        doc.text(`Scadenza:`, startX1, yPos);
-        doc.text(`${invoiceData.scadenzaPagamento}`, startX2, yPos);
+    invoiceData.dettagliPagamento.forEach((dettaglio, index) => {
+      if (invoiceData.dettagliPagamento.length > 1) {
+        this.applyStyle(doc, 'sectionTitle');
+        doc.text(`Rata ${index + 1}:`, startX1, yPos);
         yPos += 15;
       }
 
-      if (invoiceData.importoPagamento) {
-        doc.text(`Importo da pagare:`, startX1, yPos);
-        doc.text(`${invoiceData.importoPagamento}`, startX2, yPos);
+      this.applyStyle(doc, 'body');
+
+      if (dettaglio.modalitaPagamentoDescrizione) {
+        doc.text(`Modalità:`, startX1, yPos);
+        doc.text(`${dettaglio.modalitaPagamentoDescrizione} (${dettaglio.modalitaPagamento})`, startX2, yPos);
+        yPos += 12;
       }
-    }
+
+      if (dettaglio.importoPagamento) {
+        doc.text(`Importo:`, startX1, yPos);
+        doc.text(`${dettaglio.importoPagamento}`, startX2, yPos);
+        yPos += 12;
+      }
+
+      if (dettaglio.dataScadenzaPagamento) {
+        doc.text(`Scadenza:`, startX1, yPos);
+        doc.text(`${dettaglio.dataScadenzaPagamento}`, startX2, yPos);
+        yPos += 12;
+      }
+
+      if (dettaglio.iban) {
+        doc.text(`IBAN:`, startX1, yPos);
+        doc.text(`${dettaglio.iban}`, startX2, yPos);
+        yPos += 12;
+      }
+
+      if (dettaglio.beneficiario) {
+        doc.text(`Beneficiario:`, startX1, yPos);
+        doc.text(`${dettaglio.beneficiario}`, startX2, yPos);
+        yPos += 12;
+      }
+
+      if (index < invoiceData.dettagliPagamento.length - 1) {
+        yPos += 10;
+      }
+    });
   }
 }
