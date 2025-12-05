@@ -8,13 +8,15 @@ import {
   Patch,
   UseInterceptors,
   UploadedFiles,
-  Body
+  Body,
+  Res
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceDbService } from './invoice-db.service';
 import { StatoFattura } from '@prisma/client';
-import { readFileSync, readdirSync } from 'fs';
+import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 
 @Controller('invoices')
@@ -139,7 +141,10 @@ export class InvoicesController {
   }
 
   @Get(':codiceUnico/pdf')
-  async getInvoicePdf(@Param('codiceUnico') codiceUnico: string) {
+  async getInvoicePdf(
+    @Param('codiceUnico') codiceUnico: string,
+    @Res() res: Response
+  ) {
     try {
       const pdfDir = resolve(process.cwd(), process.env.PDF_OUTPUT_DIR || './pdf');
       
@@ -156,13 +161,17 @@ export class InvoicesController {
       }
 
       const pdfPath = join(pdfDir, pdfFile);
-      const buffer = readFileSync(pdfPath);
+      
+      if (!existsSync(pdfPath)) {
+        throw new HttpException(
+          { success: false, message: 'File PDF non esistente' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
 
-      return {
-        success: true,
-        pdf: buffer.toString('base64'),
-        filename: pdfFile,
-      };
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${pdfFile}"`);
+      res.sendFile(pdfPath);
     } catch (error) {
       console.error('Errore recupero PDF:', error.message);
       throw new HttpException(
