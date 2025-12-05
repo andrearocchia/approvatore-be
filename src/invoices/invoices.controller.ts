@@ -27,7 +27,7 @@ export class InvoicesController {
   ) {}
 
   @Post('xmlApprove')
-  @UseInterceptors(FilesInterceptor('file', 10))
+  @UseInterceptors(FilesInterceptor('file')) // Manteniamo la rimozione del limite
   async convertXmlToPdf(@UploadedFiles() files: Express.Multer.File[]) {
     try {
       if (!files || files.length === 0) {
@@ -37,27 +37,40 @@ export class InvoicesController {
         );
       }
 
-      const results: { success: true; codiceUnico: number; filename: string }[] = [];
-      const errors: { success: false; filename: string; message: string }[] = [];
-
-      for (const file of files) {
+      // 1. Mappa ogni file a una Promise che elabora il file e restituisce il risultato
+      const processingPromises = files.map(async (file) => {
         try {
           const xmlContent = file.buffer.toString('utf-8');
-          const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(xmlContent);
-          results.push({ 
+          // Questa chiamata è aggiunta all'array di Promesse
+          const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(xmlContent); 
+          
+          return { 
             success: true, 
             codiceUnico, 
-            filename: file.originalname 
-          });
+            filename: file.originalname,
+            error: null,
+          };
         } catch (error) {
-          errors.push({ 
+          return { 
             success: false, 
+            codiceUnico: null,
             filename: file.originalname, 
-            message: error.message 
-          });
+            error: error.message || 'Errore di elaborazione sconosciuto',
+          };
         }
-      }
+      });
 
+      // 2. Esegui tutte le Promises in parallelo (concorrenza)
+      // Promise.all attende il completamento di TUTTE le promesse nell'array, indipendentemente dal successo/fallimento interno.
+      const allResults = await Promise.all(processingPromises);
+
+      // 3. Filtra e separa i risultati di successo dagli errori
+      const results = allResults.filter(r => r.success);
+      const errors = allResults
+        .filter(r => !r.success)
+        .map(r => ({ success: false, filename: r.filename, message: r.error }));
+
+      // 4. Restituisce la risposta aggregata
       return {
         success: errors.length === 0,
         processed: results.length,
@@ -65,6 +78,7 @@ export class InvoicesController {
         results,
         errors
       };
+
     } catch (error) {
       console.error('Errore elaborazione fatture:', error.message);
       throw new HttpException(
