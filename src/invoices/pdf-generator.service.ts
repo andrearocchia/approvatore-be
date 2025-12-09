@@ -184,6 +184,18 @@ export class PdfGeneratorService {
     y += baseRowHeight - headerPaddingTop - headerPaddingBottom; // padding-bottom
     doc.moveTo(startX, y).lineTo(endX, y).stroke();
 
+    // LINEE VERTICALI HEADER (iniziale, intermedie e finale)
+    const headerStartY = doc.y - baseRowHeight + headerPaddingTop + 1;
+    columns.forEach(col => {
+      doc.moveTo(col.x, headerStartY)
+        .lineTo(col.x, y)
+        .stroke();
+    });
+    // Linea verticale finale header
+    doc.moveTo(endX, headerStartY)
+      .lineTo(endX, y)
+      .stroke();
+      
     this.applyStyle(doc, "table");
 
     // ROWS
@@ -226,6 +238,13 @@ export class PdfGeneratorService {
           .stroke();
       });
 
+      // LINEA VERTICALE FINALE (chiusura ultima cella)
+      doc.moveTo(endX, y)
+        .lineTo(endX, y + rowHeight)
+        .lineWidth(0.5)
+        .strokeColor("#aaa")
+        .stroke();
+
       // linea finale orizzontale della riga
       y += rowHeight;
       doc.moveTo(startX, y).lineTo(endX, y).lineWidth(0.5).strokeColor("#aaa").stroke();
@@ -240,7 +259,7 @@ export class PdfGeneratorService {
     const startX2 = 500;
 
     doc.save()
-      .moveTo(50, startY)
+      .moveTo(40, startY)
       .lineTo(startX2 + 55, startY)
       .lineWidth(1)
       .strokeColor('#000000')
@@ -284,7 +303,7 @@ export class PdfGeneratorService {
     }
 
     const startY = doc.y;
-    const startX1 = 50;
+    const startX1 = 40;
     const startX2 = 200;
 
     doc.save()

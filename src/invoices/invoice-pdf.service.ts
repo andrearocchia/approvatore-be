@@ -65,10 +65,31 @@ export class InvoicePdfService {
   }
 
   private addCurrencySymbol(value: string, divisa?: string): string {
-    if (divisa === 'EUR' && value !== 'N/A') {
-      return `${value} €`;
+    if (value === 'N/A') {
+      return value;
     }
-    return value;
+
+    const symbols: Record<string, string> = {
+      EUR: '€',
+      USD: '$',
+      GBP: '£',
+      CHF: 'CHF',
+      JPY: '¥',
+      CAD: 'C$',
+      AUD: 'A$',
+      NZD: 'NZ$',
+      SEK: 'kr',
+      NOK: 'kr',
+      DKK: 'kr',
+      CNY: '¥',
+      HKD: 'HK$',
+      SGD: 'S$',
+      INR: '₹'
+    };
+
+    const symbol = symbols[divisa ?? ''] ?? '';
+
+    return symbol ? `${symbol} ${value}` : value;
   }
 
   private safeGet(obj: any, defaultValue = 'N/A'): string {
