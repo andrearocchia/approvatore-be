@@ -27,6 +27,7 @@ model Invoice {
   codiceUnico           Int      @unique @default(autoincrement())
   stato                 StatoFattura @default(in_attesa)
   note                  String   @default("")
+  approvatore           String   
   
   // Dati generali
   numero                String
@@ -75,9 +76,9 @@ model Invoice {
   aliquota              String
   esigibilitaIVA        String?
   
-  // Pagamento - MODIFICATO
+  // Pagamento
   condizioniPagamento   String?
-  dettagliPagamento     String  // JSON stringificato con array di DettaglioPagamento
+  dettagliPagamento     String
   
   // Terzo intermediario
   terzoIntermediarioDenominazione String?
@@ -87,7 +88,7 @@ model Invoice {
   soggettoEmittente     String?
   
   // Linee (JSON)
-  linee                 String  // JSON stringificato
+  linee                 String
   
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
