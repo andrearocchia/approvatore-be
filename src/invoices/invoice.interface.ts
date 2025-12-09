@@ -15,6 +15,7 @@ export interface Invoice {
   id: string;
   stato: string;
   note: string;
+  approvatore: string;
   numero: string;
   data: string;
   tipoDocumento: string;

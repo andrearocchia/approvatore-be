@@ -6,11 +6,12 @@ const prisma = new PrismaClient();
 
 @Injectable()
 export class InvoiceDbService {
-  async saveInvoice(invoiceData: Omit<Invoice, 'id'>): Promise<number> {
+  async saveInvoice(invoiceData: Omit<Invoice, 'id'>, approvatore: string): Promise<number> {
     const invoice = await prisma.invoice.create({
       data: {
         stato: invoiceData.stato as StatoFattura,
         note: invoiceData.note,
+        approvatore,
         
         numero: invoiceData.numero,
         data: invoiceData.data,
@@ -99,9 +100,12 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
-  async getStandByInvoices(): Promise<Invoice[]> {
+  async getStandByInvoices(approvatore: string): Promise<Invoice[]> {
     const invoices = await prisma.invoice.findMany({
-      where: { stato: 'in_attesa' },
+      where: { 
+        stato: 'in_attesa',
+        approvatore
+      },
       orderBy: { createdAt: 'desc' },
     });
     
@@ -136,6 +140,7 @@ export class InvoiceDbService {
       id: dbInvoice.codiceUnico.toString(),
       stato: dbInvoice.stato,
       note: dbInvoice.note,
+      approvatore: dbInvoice.approvatore,
       numero: dbInvoice.numero,
       data: dbInvoice.data,
       tipoDocumento: dbInvoice.tipoDocumento,
