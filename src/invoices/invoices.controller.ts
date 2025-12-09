@@ -27,8 +27,11 @@ export class InvoicesController {
   ) {}
 
   @Post('xmlApprove')
-  @UseInterceptors(FilesInterceptor('file')) // Manteniamo la rimozione del limite
-  async convertXmlToPdf(@UploadedFiles() files: Express.Multer.File[]) {
+  @UseInterceptors(FilesInterceptor('file'))
+  async convertXmlToPdf(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body('approvatore') approvatore: string
+  ) {
     try {
       if (!files || files.length === 0) {
         throw new HttpException(
@@ -37,12 +40,17 @@ export class InvoicesController {
         );
       }
 
-      // 1. Mappa ogni file a una Promise che elabora il file e restituisce il risultato
+      if (!approvatore) {
+        throw new HttpException(
+          { success: false, message: 'Campo approvatore mancante' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
       const processingPromises = files.map(async (file) => {
         try {
           const xmlContent = file.buffer.toString('utf-8');
-          // Questa chiamata è aggiunta all'array di Promesse
-          const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(xmlContent); 
+          const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(xmlContent, approvatore);
           
           return { 
             success: true, 
@@ -60,17 +68,13 @@ export class InvoicesController {
         }
       });
 
-      // 2. Esegui tutte le Promises in parallelo (concorrenza)
-      // Promise.all attende il completamento di TUTTE le promesse nell'array, indipendentemente dal successo/fallimento interno.
       const allResults = await Promise.all(processingPromises);
 
-      // 3. Filtra e separa i risultati di successo dagli errori
       const results = allResults.filter(r => r.success);
       const errors = allResults
         .filter(r => !r.success)
         .map(r => ({ success: false, filename: r.filename, message: r.error }));
 
-      // 4. Restituisce la risposta aggregata
       return {
         success: errors.length === 0,
         processed: results.length,
@@ -102,10 +106,10 @@ export class InvoicesController {
     }
   }
 
-  @Get('standby')
-  async getStandByInvoices() {
+  @Get('standby/:approvatore')
+  async getStandByInvoices(@Param('approvatore') approvatore: string) {
     try {
-      const invoices = await this.invoiceDbService.getStandByInvoices();
+      const invoices = await this.invoiceDbService.getStandByInvoices(approvatore);
       return { success: true, invoices };
     } catch (error) {
       console.error('Errore recupero fatture in attesa:', error.message);
