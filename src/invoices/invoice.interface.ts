@@ -24,6 +24,7 @@ export interface Invoice {
   causale?: string;
   codiceDestinatario: string;
   pecDestinatario?: string;
+  updatedAt?: string;
   cedente: {
     nome: string;
     partitaIva: string;

@@ -149,6 +149,7 @@ export class InvoiceDbService {
       causale: dbInvoice.causale,
       codiceDestinatario: dbInvoice.codiceDestinatario,
       pecDestinatario: dbInvoice.pecDestinatario,
+      updatedAt: dbInvoice.updatedAt,
 
       cedente: {
         nome: dbInvoice.cedenteNome,
