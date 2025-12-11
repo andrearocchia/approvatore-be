@@ -16,19 +16,6 @@ async function bootstrap() {
     prefix: '/',
   });
 
-  app.use((req, res, next) => {
-    if (
-      !req.url.startsWith('/auth') &&
-      !req.url.startsWith('/users') &&
-      !req.url.startsWith('/invoices') &&
-      !req.url.includes('.')
-    ) {
-      res.sendFile(join(publicPath, 'index.html'));
-    } else {
-      next();
-    }
-  });
-
   await app.listen(3000);
 }
 bootstrap();
