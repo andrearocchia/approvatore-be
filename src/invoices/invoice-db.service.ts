@@ -112,42 +112,17 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
-  async getProcessedInvoices(page: number = 1, pageSize: number = 50): Promise<{
-    invoices: Invoice[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-  }> {
-    const skip = (page - 1) * pageSize;
+  async getProcessedInvoices(): Promise<Invoice[]> {
+    const invoices = await prisma.invoice.findMany({
+      where: { 
+        stato: { 
+          in: ['approvato', 'rifiutato'] 
+        } 
+      },
+      orderBy: { createdAt: 'desc' },
+    });
     
-    const [invoices, total] = await Promise.all([
-      prisma.invoice.findMany({
-        where: { 
-          stato: { 
-            in: ['approvato', 'rifiutato'] 
-          } 
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: pageSize,
-      }),
-      prisma.invoice.count({
-        where: { 
-          stato: { 
-            in: ['approvato', 'rifiutato'] 
-          } 
-        },
-      })
-    ]);
-    
-    return {
-      invoices: invoices.map(inv => this.mapToInvoice(inv)),
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-    };
+    return invoices.map(inv => this.mapToInvoice(inv));
   }
 
   private safeJsonParse(jsonString: string, fallback: any = []): any {
