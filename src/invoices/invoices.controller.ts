@@ -9,6 +9,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   Body,
+  Query,
   Res
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -121,10 +122,16 @@ export class InvoicesController {
   }
 
   @Get('processed')
-  async getProcessedInvoices() {
+  async getProcessedInvoices(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string
+  ) {
     try {
-      const invoices = await this.invoiceDbService.getProcessedInvoices();
-      return { success: true, invoices };
+      const pageNum = page ? parseInt(page) : 1;
+      const pageSizeNum = pageSize ? parseInt(pageSize) : 50;
+      
+      const result = await this.invoiceDbService.getProcessedInvoices(pageNum, pageSizeNum);
+      return { success: true, ...result };
     } catch (error) {
       console.error('Errore recupero fatture elaborate:', error.message);
       throw new HttpException(
