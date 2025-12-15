@@ -4,8 +4,26 @@ import { Invoice } from './invoice.interface';
 
 const prisma = new PrismaClient();
 
+interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface ProcessedInvoicesFilters {
+  dataDa?: string;
+  dataA?: string;
+  numeroFattura?: string;
+  fornitore?: string;
+  stato?: string;
+}
+
 @Injectable()
 export class InvoiceDbService {
+
+  // Salva fattura in db
   async saveInvoice(invoiceData: Omit<Invoice, 'id'>, approvatore: string): Promise<number> {
     const invoice = await prisma.invoice.create({
       data: {
@@ -72,6 +90,7 @@ export class InvoiceDbService {
     return invoice.codiceUnico;
   }
 
+  // Aggiorna stato fattura
   async updateInvoiceStatus(codiceUnico: number, stato: StatoFattura, note?: string): Promise<void> {
     await prisma.invoice.update({
       where: { codiceUnico },
@@ -82,6 +101,7 @@ export class InvoiceDbService {
     });
   }
 
+  // Ottieni fattura tramite ID
   async getInvoiceById(codiceUnico: number): Promise<Invoice | null> {
     const invoice = await prisma.invoice.findUnique({
       where: { codiceUnico },
@@ -92,6 +112,7 @@ export class InvoiceDbService {
     return this.mapToInvoice(invoice);
   }
 
+  // Ottieni tutte le fatture
   async getAllInvoices(): Promise<Invoice[]> {
     const invoices = await prisma.invoice.findMany({
       orderBy: { createdAt: 'desc' },
@@ -100,6 +121,7 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
+  // Ottieni tutte le fatture 'in attesa'
   async getStandByInvoices(approvatore: string): Promise<Invoice[]> {
     const invoices = await prisma.invoice.findMany({
       where: { 
@@ -112,17 +134,58 @@ export class InvoiceDbService {
     return invoices.map(inv => this.mapToInvoice(inv));
   }
 
-  async getProcessedInvoices(): Promise<Invoice[]> {
-    const invoices = await prisma.invoice.findMany({
-      where: { 
-        stato: { 
-          in: ['approvato', 'rifiutato'] 
-        } 
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    
-    return invoices.map(inv => this.mapToInvoice(inv));
+  // Paginazione tabella storico
+  async getProcessedInvoices(
+    page: number = 1,
+    pageSize: number = 15,
+    filters?: ProcessedInvoicesFilters
+  ): Promise<PaginatedResult<Invoice>> {
+    // Costruisci la where clause
+    const where: any = {
+      stato: { in: ['approvato', 'rifiutato'] }
+    };
+
+    // Applica filtri se presenti
+    if (filters) {
+      if (filters.dataDa) {
+        // data è String in Prisma, non DateTime
+        where.data = { ...where.data, gte: filters.dataDa };
+      }
+      if (filters.dataA) {
+        // data è String in Prisma, non DateTime
+        where.data = { ...where.data, lte: filters.dataA };
+      }
+      if (filters.numeroFattura) {
+        // Case-insensitive search
+        where.numero = { contains: filters.numeroFattura, mode: 'insensitive' };
+      }
+      if (filters.fornitore) {
+        // Case-insensitive search
+        where.cedenteNome = { contains: filters.fornitore, mode: 'insensitive' };
+      }
+      if (filters.stato && filters.stato !== 'tutti') {
+        where.stato = filters.stato;
+      }
+    }
+
+    // Esegui query con paginazione
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.invoice.count({ where })
+    ]);
+
+    return {
+      data: invoices.map(inv => this.mapToInvoice(inv)),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   private safeJsonParse(jsonString: string, fallback: any = []): any {

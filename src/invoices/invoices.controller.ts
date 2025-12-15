@@ -9,14 +9,15 @@ import {
   UseInterceptors,
   UploadedFiles,
   Body,
-  Res
+  Res,
+  Query
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceDbService } from './invoice-db.service';
 import { StatoFattura } from '@prisma/client';
-import { readFileSync, readdirSync, existsSync } from 'fs';
+import { readdirSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 
 @Controller('invoices')
@@ -26,6 +27,7 @@ export class InvoicesController {
     private readonly invoiceDbService: InvoiceDbService,
   ) {}
 
+  // Endpoint POST Arca: Caricamento e elaborazione fatture XML
   @Post('xmlApprove')
   @UseInterceptors(FilesInterceptor('file'))
   async convertXmlToPdf(
@@ -92,6 +94,7 @@ export class InvoicesController {
     }
   }
 
+  // Endpoint ottieni tutte le fatture
   @Get('all')
   async getAllInvoices() {
     try {
@@ -106,6 +109,7 @@ export class InvoicesController {
     }
   }
 
+  // Endpoint ottieni tutte le fatture per un approvatore
   @Get('standby/:approvatore')
   async getStandByInvoices(@Param('approvatore') approvatore: string) {
     try {
@@ -120,11 +124,39 @@ export class InvoicesController {
     }
   }
 
+  // Endpoint con paginazione e filtri
   @Get('processed')
-  async getProcessedInvoices() {
+  async getProcessedInvoices(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('dataDa') dataDa?: string,
+    @Query('dataA') dataA?: string,
+    @Query('numeroFattura') numeroFattura?: string,
+    @Query('fornitore') fornitore?: string,
+    @Query('stato') stato?: string,
+  ) {
     try {
-      const result = await this.invoiceDbService.getProcessedInvoices();
-      return { success: true, invoices: result };
+      const pageNum = page ? parseInt(page, 10) : 1;
+      const pageSizeNum = pageSize ? parseInt(pageSize, 10) : 15;
+
+      const filters = {
+        dataDa,
+        dataA,
+        numeroFattura,
+        fornitore,
+        stato,
+      };
+
+      const result = await this.invoiceDbService.getProcessedInvoices(
+        pageNum,
+        pageSizeNum,
+        filters
+      );
+
+      return { 
+        success: true, 
+        ...result
+      };
     } catch (error) {
       console.error('Errore recupero fatture elaborate:', error.message);
       throw new HttpException(
@@ -134,6 +166,7 @@ export class InvoicesController {
     }
   }
 
+  // Endpoint GET Arca: Verifica stato approvazione fattura
   @Get(':codiceUnico')
   async getInvoiceStatusAndNote(@Param('codiceUnico') codiceUnico: string) {
     try {
@@ -158,6 +191,7 @@ export class InvoicesController {
     }
   }
 
+  // Endpoint ottieni pdf per codice unico
   @Get(':codiceUnico/pdf')
   async getInvoicePdf(
     @Param('codiceUnico') codiceUnico: string,
@@ -199,6 +233,7 @@ export class InvoicesController {
     }
   }
 
+  // Endpoint ottieni stato per codice unico
   @Patch(':codiceUnico/status')
   async updateInvoiceStatus(
     @Param('codiceUnico') codiceUnico: string,
