@@ -26,7 +26,12 @@ export class InvoicePdfService {
     return this.MODALITA_PAGAMENTO_MAP[codice] || codice;
   }
 
-  async processXmlAndGeneratePdf(xmlContent: string, approvatore: string): Promise<number> {
+  async processXmlAndGeneratePdf(
+    xmlContent: string, 
+    approvatore: string,
+    protocolloIva: number,
+    noteInInvio: string
+  ): Promise<number> {
     const cleanXml = this.cleanXmlContent(xmlContent);
     const parsed = await parseStringPromise(cleanXml, { 
       explicitArray: true, 
@@ -40,7 +45,12 @@ export class InvoicePdfService {
     });
     
     const invoiceData = this.extractInvoiceData(parsed);
-    const codiceUnico = await this.invoiceDb.saveInvoice(invoiceData, approvatore);
+    const codiceUnico = await this.invoiceDb.saveInvoice(
+      invoiceData, 
+      approvatore,
+      protocolloIva,
+      noteInInvio
+    );
     await this.generatePdf(invoiceData, codiceUnico);
     
     return codiceUnico;
@@ -154,6 +164,8 @@ export class InvoicePdfService {
       numero: this.safeGet(datiGenerali?.Numero),
       stato: 'in_attesa',
       note: '',
+      noteInInvio: '',
+      protocolloIva: undefined,
       approvatore: '',
       data: this.safeGet(datiGenerali?.Data),
       tipoDocumento: this.safeGet(datiGenerali?.TipoDocumento),

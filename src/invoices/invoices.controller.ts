@@ -28,11 +28,13 @@ export class InvoicesController {
   ) {}
 
   // Endpoint POST Arca: Caricamento e elaborazione fatture XML
-  @Post('xmlApprove')
+ @Post('xmlApprove')
   @UseInterceptors(FilesInterceptor('file'))
   async convertXmlToPdf(
     @UploadedFiles() files: Express.Multer.File[],
-    @Body('approvatore') approvatore: string
+    @Body('approvatore') approvatore: string,
+    @Body('protocolloIva') protocolloIva: string,
+    @Body('noteInInvio') noteInInvio: string
   ) {
     try {
       if (!files || files.length === 0) {
@@ -49,10 +51,30 @@ export class InvoicesController {
         );
       }
 
+      if (!protocolloIva) {
+        throw new HttpException(
+          { success: false, message: 'Campo protocolloIva mancante' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const protocolloIvaNum = parseInt(protocolloIva, 10);
+      if (isNaN(protocolloIvaNum)) {
+        throw new HttpException(
+          { success: false, message: 'protocolloIva deve essere un numero valido' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
       const processingPromises = files.map(async (file) => {
         try {
           const xmlContent = file.buffer.toString('utf-8');
-          const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(xmlContent, approvatore);
+          const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(
+            xmlContent, 
+            approvatore,
+            protocolloIvaNum,
+            noteInInvio || ''
+          );
           
           return { 
             success: true, 

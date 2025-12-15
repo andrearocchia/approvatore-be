@@ -26,7 +26,9 @@ model Invoice {
   id                    Int      @id @default(autoincrement())
   codiceUnico           Int      @unique @default(autoincrement())
   stato                 StatoFattura @default(in_attesa)
-  note                  String   @default("")
+  note                  String   @default("") @db.Text
+  noteInInvio           String   @default("") @db.Text
+  protocolloIva         Int?
   approvatore           String   
   
   // Dati generali

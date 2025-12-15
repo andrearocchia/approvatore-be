@@ -24,11 +24,18 @@ interface ProcessedInvoicesFilters {
 export class InvoiceDbService {
 
   // Salva fattura in db
-  async saveInvoice(invoiceData: Omit<Invoice, 'id'>, approvatore: string): Promise<number> {
+  async saveInvoice(
+    invoiceData: Omit<Invoice, 'id'>, 
+    approvatore: string,
+    protocolloIva: number,
+    noteInInvio: string
+  ): Promise<number> {
     const invoice = await prisma.invoice.create({
       data: {
         stato: invoiceData.stato as StatoFattura,
         note: invoiceData.note,
+        noteInInvio: noteInInvio,
+        protocolloIva: protocolloIva,
         approvatore,
         
         numero: invoiceData.numero,
@@ -203,6 +210,8 @@ export class InvoiceDbService {
       id: dbInvoice.codiceUnico.toString(),
       stato: dbInvoice.stato,
       note: dbInvoice.note,
+      noteInInvio: dbInvoice.noteInInvio,
+      protocolloIva: dbInvoice.protocolloIva,
       approvatore: dbInvoice.approvatore,
       numero: dbInvoice.numero,
       data: dbInvoice.data,
