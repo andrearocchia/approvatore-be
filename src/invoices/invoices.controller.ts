@@ -10,6 +10,7 @@ import {
   UploadedFiles,
   Body,
   Res,
+  Logger,
   Query
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -22,6 +23,8 @@ import { join, resolve } from 'path';
 
 @Controller('invoices')
 export class InvoicesController {
+  private readonly logger = new Logger(InvoicesController.name);
+
   constructor(
     private readonly pdfService: InvoicePdfService,
     private readonly invoiceDbService: InvoiceDbService,
@@ -37,6 +40,7 @@ export class InvoicesController {
     @Body('noteInInvio') noteInInvio: string
   ) {
     try {
+      this.logger.log(`Caricamento e elaborazione fatture XML: ${files.length} file(s) ricevuto(s) per ${approvatore}`);
       if (!files || files.length === 0) {
         throw new HttpException(
           { success: false, message: 'Nessun file XML caricato' },
@@ -68,6 +72,7 @@ export class InvoicesController {
 
       const processingPromises = files.map(async (file) => {
         try {
+          this.logger.log(`Elaborazione file: ${file.originalname}`);
           const xmlContent = file.buffer.toString('utf-8');
           const codiceUnico = await this.pdfService.processXmlAndGeneratePdf(
             xmlContent, 
@@ -83,6 +88,7 @@ export class InvoicesController {
             error: null,
           };
         } catch (error) {
+          this.logger.error(`Errore elaborazione file ${file.originalname}: ${error.message}`);
           return { 
             success: false, 
             codiceUnico: null,
@@ -108,7 +114,7 @@ export class InvoicesController {
       };
 
     } catch (error) {
-      console.error('Errore elaborazione fatture:', error.message);
+      this.logger.error(`Errore generico: ${error.message}`);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.BAD_REQUEST,
@@ -120,10 +126,11 @@ export class InvoicesController {
   @Get('all')
   async getAllInvoices() {
     try {
+      this.logger.log('Recupero tutte le fatture');
       const invoices = await this.invoiceDbService.getAllInvoices();
       return { success: true, invoices };
     } catch (error) {
-      console.error('Errore recupero fatture:', error.message);
+      this.logger.error(`Errore recupero tutte le fatture: ${error.message}`);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -135,10 +142,11 @@ export class InvoicesController {
   @Get('standby/:approvatore')
   async getStandByInvoices(@Param('approvatore') approvatore: string) {
     try {
+      this.logger.log(`Recupero fatture in attesa per approvatore: ${approvatore}`);
       const invoices = await this.invoiceDbService.getStandByInvoices(approvatore);
       return { success: true, invoices };
     } catch (error) {
-      console.error('Errore recupero fatture in attesa:', error.message);
+      this.logger.error(`Errore recupero fatture in attesa per approvatore ${approvatore}: ${error.message}`);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -158,6 +166,7 @@ export class InvoicesController {
     @Query('stato') stato?: string,
   ) {
     try {
+      this.logger.log('Recupero fatture elaborate');
       const pageNum = page ? parseInt(page, 10) : 1;
       const pageSizeNum = pageSize ? parseInt(pageSize, 10) : 15;
 
@@ -180,7 +189,7 @@ export class InvoicesController {
         ...result
       };
     } catch (error) {
-      console.error('Errore recupero fatture elaborate:', error.message);
+      this.logger.error(`Errore recupero fatture elaborate: ${error.message}`);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -192,6 +201,7 @@ export class InvoicesController {
   @Get(':codiceUnico')
   async getInvoiceStatusAndNote(@Param('codiceUnico') codiceUnico: string) {
     try {
+      this.logger.log(`Recupero fattura per codice unico: ${codiceUnico}`);
       const invoice = await this.invoiceDbService.getInvoiceById(parseInt(codiceUnico));
       
       if (!invoice) {
@@ -202,10 +212,11 @@ export class InvoicesController {
       }
 
       const { stato, note } = invoice;
+      this.logger.log(`Fattura trovata: codice unico: ${codiceUnico}, stato: ${stato}, note: ${note}`);
       
       return { success: true, stato, note };
     } catch (error) {
-      console.error('Errore recupero fattura:', error.message);
+      this.logger.error(`Errore recupero fattura per codice unico ${codiceUnico}: ${error.message}`);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -220,6 +231,7 @@ export class InvoicesController {
     @Res() res: Response
   ) {
     try {
+      this.logger.log(`Recupero PDF per codice unico: ${codiceUnico}`);
       const pdfDir = resolve(process.cwd(), process.env.PDF_OUTPUT_DIR || './pdf');
       
       const files = readdirSync(pdfDir);
@@ -247,7 +259,7 @@ export class InvoicesController {
       res.setHeader('Content-Disposition', `inline; filename="${pdfFile}"`);
       res.sendFile(pdfPath);
     } catch (error) {
-      console.error('Errore recupero PDF:', error.message);
+      this.logger.error(`Errore recupero PDF per codice unico ${codiceUnico}: ${error.message}`);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -262,6 +274,7 @@ export class InvoicesController {
     @Body() body: { stato: string; note?: string }
   ) {
     try {
+      this.logger.log(`Aggiornamento stato fattura per codice unico: ${codiceUnico}`);
       const validStates: StatoFattura[] = ['in_attesa', 'approvato', 'rifiutato'];
       if (!validStates.includes(body.stato as StatoFattura)) {
         throw new HttpException(
@@ -281,7 +294,7 @@ export class InvoicesController {
         message: 'Stato fattura aggiornato',
       };
     } catch (error) {
-      console.error('Errore aggiornamento stato:', error.message);
+      this.logger.error(`Errore aggiornamento stato fattura per codice unico ${codiceUnico}: ${error.message}`);
       throw new HttpException(
         { success: false, message: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
